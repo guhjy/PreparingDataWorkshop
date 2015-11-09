@@ -7,6 +7,8 @@ These are instructions how to prepare to work along with the examples from the w
 >
 > Data quality is the biggest determiner of data science project success or failure. Preparing data for analysis is one of the most important, laborious, and yet neglected aspects of data science. Many of the routine steps can be automated in a principled manner. This workshop will lay out the fundamentals of preparing data and provide interactive demonstrations in the open source R analysis environment. We will cover what commonly goes wrong, and how to detect and fix it. Participants can download materials beforehand from <https://github.com/WinVector/PreparingDataWorkshop> and either follow along during the workshop, or at their leisure. To follow along during the workshop participants will want a laptop with R ( <https://cran.r-project.org> ), RStudio ( <https://www.rstudio.com> ), and a few packages (named in README.md on the Github repository) installed.
 
+You will want to download all files in this Github repository, and prepare your machine before trying the exampels. Please be patient as we are putting these instructions together as we finish and polish our workshop, so there may be some changes prior to the workshop.
+
 To run all of the examples you will need a machine with a current version of [R](https://cran.r-project.org), and [RStudio](https://www.rstudio.com) installed.
 
 To install some of the additional packages you will need your system's compiler tools installed (often c,c++, and fortran). How to do this varies by system and is beyond the scope of the worksop.
@@ -22,8 +24,8 @@ install.packages(c('devtools',
                    'gbm',
                    'ggplot2',
                    'knitr',
-                   'reshape2',
                    'plyr',
+                   'reshape2',
                    'snow',
                    'vtreat'))
 devtools::install_github('WinVector/WVPlots')
