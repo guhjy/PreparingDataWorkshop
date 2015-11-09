@@ -11,3 +11,11 @@
 # produced vignettes
 vignettes/*.html
 vignettes/*.pdf
+.Rproj.user
+
+# OSX stuff
+.DS_Store
+
+# general stuff
+*~
+#*
