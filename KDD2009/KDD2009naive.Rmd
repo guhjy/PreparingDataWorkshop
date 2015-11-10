@@ -129,7 +129,21 @@ modelglms = glm(as.formula(formulaS),
 )
 #print(summary(modelglms))
 treatedTrainP[[mname]] = predict(modelglms,newdata=treatedTrainM,type='response')
-treatedTestP[[mname]] = predict(modelglms,newdata=treatedTest,type='response')
+
+# can only score test rows, that don't expose novel levels (something been trying hard to avoid)
+good <- logical(nrow(treatedTest))
+good <- TRUE
+for(v in vars) {
+  if(is.factor(treatedTrainM[[v]])) {
+     good <- good & (treatedTest[[v]] %in% unique(treatedTrainM[[v]]))
+  }
+}
+print(summary(good))
+treatedTestP[[mname]] <- NA
+treatedTestP[[mname]][good] = predict(modelglms,
+                                      newdata=treatedTest[good,,drop=FALSE],
+                                      type='response')
+treatedTestP[[mname]][is.na(treatedTestP[[mname]])] <- mean(treatedTrainP[[yName]])
 
 t1 = paste(mname,'trainingM data')
 print(DoubleDensityPlot(treatedTrainP, mname, yName, 
