@@ -2,6 +2,7 @@
 [KDD2009 example](http://www.sigkdd.org/kdd-cup-2009-customer-relationship-prediction).  Winners had hold-out AUC of 0.7611 on churn.   See [here](https://github.com/WinVector/zmPDSwR/tree/master/KDD2009) for more details.
 
 ```{r kddexlibs, tidy=FALSE}
+print(date())
 #load some libraries
 # http://www.win-vector.com/blog/2014/08/vtreat-designing-a-package-for-variable-treatment/
 library('vtreat')
@@ -15,7 +16,9 @@ library('ggplot2')
 
 # load the data as in the book
 # change this path to match your directory structure
-dir = '~/Documents/work/PracticalDataScienceWithR/zmPDSwR/KDD2009/' 
+dir = './' 
+debug = FALSE
+
 
 d = read.table(paste(dir,'orange_small_train.data.gz',sep=''),
                 header=T,sep='\t',na.strings=c('NA',''), 
@@ -34,11 +37,10 @@ d$rgroup = runif(dim(d)[[1]])
 dTrainM = subset(d,rgroup<=0.5)  # set for building models
 dTrainC = subset(d,(rgroup>0.5) & (rgroup<=0.9)) # set for impact coding
 dTest = subset(d,rgroup>0.9) # set for evaluation
-debug = FALSE
 if(debug) {
-  dTrainM <- dTrainM[sample.int(nrow(dTrainM),100),]
-  dTrainC <- dTrainC[sample.int(nrow(dTrainC),100),]
-  dTest <- dTest[sample.int(nrow(dTest),100),]
+  dTrainM <- dTrainM[sample.int(nrow(dTrainM),1000),]
+  dTrainC <- dTrainC[sample.int(nrow(dTrainC),1000),]
+  dTest <- dTest[sample.int(nrow(dTest),1000),]
 }
 rm(list=c('d','churn','appetency','upselling','dir'))
 outcomes = c('churn','appetency','upselling')
@@ -47,17 +49,14 @@ vars = setdiff(colnames(dTrainM),
                 nonvars)
 yName = 'churn'
 yTarget = 1
-```
-
-```{r kddprint, tidy=FALSE}
-print(summary(dTrainM))
+print(date())
 ```
 
 
 
 ```{r kdddesign, tidy=FALSE}
 # build data treatments
-
+print(date())
 set.seed(239525)
 
 cl <- c()
@@ -71,7 +70,7 @@ treatmentsC = designTreatmentsC(dTrainC,
     vars,yName,yTarget,
     smFactor=2.0, 
     parallelCluster=cl,
-    verbose=TRUE)
+    verbose=FALSE)
 
 kddSig = 0.05
 
@@ -95,6 +94,7 @@ if(!is.null(cl)) {
     parallel::stopCluster(cl)
     cl = NULL
 }
+print(date())
 ```
 
 
@@ -102,6 +102,7 @@ if(!is.null(cl)) {
 
 
 ```{r kddmodels, tidy=FALSE}
+print(date())
 # Run other models (with proper coding/training separation).
 #
 # This gets us back to AUC 0.72
@@ -157,5 +158,5 @@ for(mname in c('gbmPred','glmPred')) {
   print(date())
   print("*****************************")
 }
-
+print(date())
 ```
