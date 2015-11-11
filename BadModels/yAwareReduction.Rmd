@@ -89,7 +89,7 @@ runExample <- function(rows,nSignalFeatures,nNoiseFeatures,trainer,predictor,tit
 ```{r}
 # glm example
 set.seed(123525)   # make result more repeatable
-res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='GLM',
+res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='GLMnet',
                   trainer=function(yName,varNames,yValues,data) {
                     formula <- as.formula(paste(yName,paste(varNames,collapse=' + '),
                                                 sep=' ~ '))
@@ -104,7 +104,7 @@ res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='GLM',
 
 
 ```{r}
-# glm principeal components example
+# glm principal components example
 set.seed(123525)   # make result more repeatable
 res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='GLM principal components',
                   trainer=function(yName,varNames,yValues,data) {
@@ -154,4 +154,25 @@ res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='GLM with
 )
 ```
 
+
+```{r}
+# glmnet example
+library('glmnet')
+library('caret')
+set.seed(123525)   # make result more repeatable
+res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='GLM',
+                  trainer=function(yName,varNames,yValues,data) {
+                    model = glmnet(x=as.matrix(data[,varNames,drop=FALSE]),
+                           y=factor(data[[yName]],levels=yValues),
+                           family='binomial',
+                           alpha=0)
+                    list(model=model,varNames=varNames)
+                  },
+                  predictor=function(model,newdata,yValues) { 
+                    predict(model$model,
+                            newx=as.matrix(newdata[,model$varNames,drop=FALSE]),
+                            type='response')[,yValues[[2]]]
+                  }
+)
+```
 
