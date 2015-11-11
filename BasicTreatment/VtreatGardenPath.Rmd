@@ -1,0 +1,151 @@
+---
+title: "vtreat_gardenpath"
+author: "Nina Zumel"
+date: "November 10, 2015"
+output: html_document
+---
+
+A simple example of running vtreat.
+
+```{r, libraries}
+library(vtreat)
+library(ggplot2)
+```
+
+Functions for generating the data
+```{r, datagen}
+
+make_cats = function() {
+  small_cat = c("red", "blue", "green", "pink", "magenta")
+  sc_means = 3*runif(length(small_cat))
+  names(sc_means) = small_cat
+  sc_probs = c(0.3, 0.3, 0.3, 0.05, 0.05)
+  
+  large_cat = paste("v", 1:200, sep="_")
+  lc_means = 2*runif(length(large_cat))
+  names(lc_means) = large_cat
+  
+  list(sc_means=sc_means,
+       sc_probs=sc_probs,
+       lc_means=lc_means)
+}
+
+make_data = function(N, na_rate,
+                     sc_means, sc_probs,
+                     lc_means) {
+  
+  small_cat = names(sc_means)
+  large_cat = names(lc_means)
+  
+  x1 = rnorm(N)
+  x1 = ifelse(runif(N) < na_rate, NA, x1)
+
+  x2 = sample(small_cat, size=N, replace=TRUE, prob=sc_probs)
+  x3 = sample(large_cat, size=N, replace=TRUE)
+  
+  y = ifelse(is.na(x1), -1, x1) + 
+    sc_means[x2] + 
+    lc_means[x3] + rnorm(N)
+
+  data.frame(x1=x1, x2=x2, x3=x3, y = y)
+  
+}
+  
+```
+
+Make the data
+
+```{r, data}
+
+set.seed(233542)
+cats = make_cats()
+na_rate = 0.01
+
+train = make_data(1000, na_rate, cats$sc_means, cats$sc_probs, cats$lc_means)
+calib = make_data(500, na_rate, cats$sc_means, cats$sc_probs, cats$lc_means)
+calibBig = make_data(2000, na_rate, cats$sc_means, cats$sc_probs, cats$lc_means)
+test = make_data(1000, na_rate, cats$sc_means, cats$sc_probs, cats$lc_means)
+
+```
+
+Try to naively fit an lm. We have to guard against levels possibly not showing up in test, and against rows not being scored because of a NA in the input.
+
+```{r, naive}
+fmla = "y ~ x1 + x2 + x3"
+model = lm(fmla, data=train)
+
+# lots of coefficients, too long to want to print the summary
+print(paste(length(model$coefficients), "coefficients"))
+smod = summary(model)
+print(paste("R-squared = ", smod$r.squared, "Adjusted R-squared = ", smod$adj.r.squared))
+
+# this may fail because of novel levels
+test$pred = tryCatch(
+      predict(model, newdata=test),
+      error=function(e) {print(e); NULL}
+)
+
+# we have to put a guard here for the test rows where x1 is NA
+rmse = sqrt(mean((test$y - test$pred)^2, na.rm=TRUE))
+print(paste("mean(y) = ", mean(test$y), "stdev(y) = ", sd(test$y), "rmse = ", rmse))
+
+ggplot(test, aes(x=pred, y=y)) + geom_point(alpha=0.5) + geom_abline(color="blue") 
+```
+
+Now with vtreat. First, the default settings
+```{r, vtreat1}
+outcome = "y"
+varlist = setdiff(colnames(calib), outcome)
+
+# try this with just the default settings
+treatplan = designTreatmentsN(calib, varlist, outcome)
+# look at the score frame
+print(treatplan$scoreFrame)
+```
+
+The sig column of scoreFrame gives the significance of a variable against the null hypothesis that the variable has no relation to the outcome. You can see that x3 looks insignificant (even though we know it carries signal), because 500 rows of calibration is not enough to get good estimates of 200 levels that occur uniformly, (each level appears an average of 2.5 times in calib).
+
+By default a rare variable (or level) is one that occurs 2 or fewer times (set by the parameter rareCount). The new column x3_lev_rare pools all the levels that occur 1 or 2 times into one level. This pooled level does not appear significant, because in reality all the individual levels that have been pooled behave differently, so their mean in aggregate probably looks a lot like the global mean -- in other words, the pooling failed.
+
+The column x3_catN impact codes all the non-rare levels (those that appeared more than 2 times), which individually still don't occur very often, so the resulting impact model is unreliable; vtreat detects this on cross validation, and assigns a poor significance value to the column. 
+
+A bigger calibration set will mitigate these issues, because individual x3 levels will occur more often.
+
+```{r vtreat2}
+treatplan = designTreatmentsN(calibBig, varlist, outcome)
+print(treatplan$scoreFrame)
+
+```
+
+Takeaway: if you have categorical variables with many levels, you need data sets big enough to see all possible values. 
+
+Notice that for variable x2, we have indicator variables for blue, green, and red (which were common levels), but none for the relatively more rare levels pink and magenta. Assuming that both pink and magenta are non-rare (occur > 2 times) and achieve a minimum significance (set by parameter rareSig = 0.3 by default), their impact on the outcome has been folded into the x2_catN impact model (along with the impacts of red, blue, and green).
+
+Once you have the treatment plan, you must prepare the data sets.
+
+```{r prepare}
+# pruneSig: prune variables with p-value larger than this value. 
+# You can turn off pruning completely with pruneSig=NULL
+# doCollar (default TRUE) restricts numeric variables to be in the range observed in the calibration data
+train_treat = prepare(treatplan, train, pruneSig=0.05, doCollar=FALSE)
+test_treat = prepare(treatplan, test, pruneSig=0.05, doCollar=FALSE)
+
+print(colnames(train_treat))
+
+# in this case, we can check that magenta and pink levels fail the rareSig test, so they
+# are also not folded into the catN variable, which will therefore be colinear with the 
+# indicator variables. Since we're doing an lm(), don't use the catN variable
+vars = setdiff(colnames(train_treat), c(outcome, "x2_catN"))
+
+fmla = paste(outcome, paste(vars, collapse=" + "), sep = " ~ ")
+
+model = lm(fmla, data=train_treat)
+summary(model)
+test$pred = predict(model, newdata=test_treat)
+
+rmse = sqrt(mean((test$y - test$pred)^2))
+print(paste("mean(y) = ", mean(test$y), "stdev(y) = ", sd(test$y), "rmse = ", rmse))
+
+ggplot(test, aes(x=pred, y=y)) + geom_point(alpha=0.5) + geom_abline(color="blue") 
+
+```

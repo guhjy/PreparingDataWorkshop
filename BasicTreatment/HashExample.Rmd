@@ -1,0 +1,68 @@
+---
+title: "HashExample.Rmd"
+author: "Nina Zumel"
+date: "November 10, 2015"
+output: html_document
+---
+
+Make the toy data.
+
+```{r, data}
+set.seed(34546)
+
+categories = c("red", "blue", "green")
+means = c(0, 5, 10)
+names(means) = categories
+
+trainx = sample(categories, size=100, replace=TRUE)
+training = data.frame(x=trainx, y=means[trainx] + rnorm(100,sd=1.5))
+
+testx = sample(categories, size=100, replace=TRUE)
+test = data.frame(x=testx, y=means[testx] + rnorm(100,sd=1.5))
+
+```
+
+Fit models
+
+```{r, models}
+
+# Model with categorical values
+model1 = lm("y~x", data=training)
+summary(model1)
+
+# Model with hashed values. This hashes them into alphabetical order
+training$xhash = as.numeric(as.factor(training$x))
+test$xhash = as.numeric(as.factor(test$x))
+model2 = lm("y~xhash", data=training)
+summary(model2)
+
+# Model with impact-coded values. Best practice is to use separate data for coding and model fitting
+# Ideally, we should randomize the split, but it doesn't matter in this case
+calib = training[1:50,]
+train = training[51:100,]
+
+meany = mean(calib$y)
+mean_color = aggregate(calib$y, by=list(calib$x), FUN=mean)
+code = mean_color$x - meany
+names(code) = mean_color$Group.1
+train$ximpact = code[train$x]
+test$ximpact=code[test$x]
+model3 = lm("y~ximpact", data=train)
+summary(model3)
+
+```
+
+Plot outcomes
+```{r plot}
+library(ggplot2)
+library(reshape2)
+
+test$pred_cat = predict(model1, newdata=test)
+test$pred_hash = predict(model2, newdata=test)
+test$pred_impact = predict(model3, newdata=test)
+
+testlong = melt(test, measure.vars=c("pred_cat", "pred_hash", "pred_impact"),
+                variable.name="model", value.name="pred")
+
+ggplot(testlong, aes(x=pred, y=y, color=model)) + geom_point() + scale_color_brewer(palette="Dark2")
+```
