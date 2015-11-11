@@ -20,7 +20,7 @@ mkData <- function(rows,nSignalFeatures,nNoiseFeatures) {
   d <- data.frame(y=yData,stringsAsFactors=FALSE)
   if(nSignalFeatures>0) {
     mkRandVar <- function(v) {
-      rnorm(rows,mean=0.5*(as.numeric(yData)-0.5))
+      rnorm(rows) + (as.numeric(yData)-0.5)*rbinom(rows,1,0.3)
     }
     varNames <- paste('x',seq_len(nSignalFeatures),sep='_')
     varValues <- data.frame(lapply(varNames,mkRandVar),
