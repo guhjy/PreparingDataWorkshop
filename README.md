@@ -22,13 +22,17 @@ The additonal R packages you want installed are the following:
 ``` r
 install.packages(c('caret',
                    'devtools',
+                   'e1071',
                    'gbm',
                    'glmnet',
                    'ggplot2',
+                   'kernlab',
                    'knitr',
                    'plyr',
                    'pROC',
+                   'randomForest',
                    'reshape2',
+                   'rpart',
                    'snow',
                    'vtreat'))
 devtools::install_github('WinVector/WVPlots')

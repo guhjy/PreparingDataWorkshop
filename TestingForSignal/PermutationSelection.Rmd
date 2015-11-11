@@ -1,0 +1,450 @@
+---
+title: "Permutation Selection"
+author: "Nina Zumel"
+date: "July 30, 2015"
+output: html_document
+---
+
+
+For simplicity, we will do this all with glm, and mostly with deviance,
+but in theory this method will determine model significance for any
+modeling method and any metric. However, for variable selection,
+you might as well use a simple and easy to run modeling method like
+glm or lm, regardless of what your final modeling algorithm will be.
+In fact, permutation tests with lm can be made very efficient, because
+you are keeping the same design matrix and only changing the y vector.
+
+
+```{r functions}
+library('WVPlots') # library here: https://github.com/WinVector/WVPlots
+
+
+mkCoefs = function(ngood) {
+  if(ngood < 1) return(c())
+  goodnames = paste('g', seq_len(ngood), sep='_')
+  coefs = rnorm(seq_len(ngood))
+  names(coefs) = goodnames
+  coefs
+}
+
+# build a data frame with pure noise columns
+# and columns weakly correlated with y
+mkData <- function(nrows, coefs, nnoise) {
+  noiseMagnitude = 1
+
+  mkcol = function(x){rnorm(nrows)}
+
+  weighted_column_sum = function(df, coefs) {
+    cm = matrix(data=coefs, ncol=1)
+    as.numeric(as.matrix(df[,names(coefs)]) %*% cm)
+  }
+
+  d = data.frame(y = noiseMagnitude*rnorm(nrows))
+  ngood = length(coefs)
+  goodvals = NULL
+  noisevals = NULL
+
+  if(ngood > 0) {
+    goodvals = data.frame(lapply(coefs,mkcol))
+    colnames(goodvals) = names(coefs)
+    d$y = d$y + weighted_column_sum(goodvals, coefs)
+    d = cbind(d, goodvals)
+  }
+  if(nnoise > 0) {
+    noisenames = paste('n', seq_len(nnoise), sep='_')
+    noisevals = data.frame(lapply(noisenames, mkcol))
+    colnames(noisevals) = noisenames
+    d = cbind(d, noisevals)
+  }
+
+  d$y = ifelse(d$y > 0, 'pos', 'neg')
+  d
+}
+
+get_deviance = function(y, pred) {
+  -2*sum(y*log(pred) + (1-y)*log(1-pred))
+}
+
+#
+# The theoretical significance of a glm model (with respect to the deviance metric)
+# is given between the model's deviance on training and the data's "null deviance" 
+# (the deviance of the training data's grand mean). The difference between the
+# two is distributed as a chi-square distribution with P - 1 degrees of freedom,
+# where P is the number of parameters of the model (P counts the DC term, so P is
+# the number of variables).
+#
+glm_significance = function(glm_mod) {
+  delta_deviance = glm_mod$null.deviance - glm_mod$deviance
+  dof = length(glm_mod$coefficients)-1
+  sig = pchisq(delta_deviance, dof, lower.tail=FALSE)
+}
+
+
+#
+# Return performance metrics for a set of predictions
+#
+performance_eval = function(predScore, truth, posclass,
+                            threshold=0.5,
+                            title='',
+                            verbose=TRUE) {
+  negclass = setdiff(unique(truth), posclass) # should be only 1
+  data = data.frame(y=truth, predScore=predScore)
+  
+  if(min(data$predScore) >= threshold) {
+    threshold = median(predScore)
+  }
+  data$pred = ifelse(data$predScore>=threshold,
+                     posclass, negclass)
+  tab = table(truth=data$y,
+              predict=data$pred)
+  if(dim(tab)[2] < 2) {
+    print(tab)
+    print(summary(predScore))
+    print(paste("threshold = ", threshold))
+  }
+  
+  if(verbose) {
+    print(paste(title, "results"))
+    print(tab)
+  }
+
+  accuracy = sum(diag(tab))/sum(tab)
+  precision = tab[2,2]/sum(tab[,2])
+  recall = tab[2,2]/sum(tab[2,])
+  deviance = get_deviance(data$y==posclass, data$predScore)
+
+  if(verbose) {
+    if(length(unique(data$pred))>1) {
+      print(ROCPlot(data,'predScore','y',title=paste(title,'ROC plot')))
+    }
+  }
+  output = data.frame(deviance = deviance, accuracy=accuracy,
+             precision=precision,
+            recall=recall)
+  rownames(output)=title
+  output
+}
+
+
+# return a frame of the different metrics on the permuted data
+permutation_test = function(dataf, nperm) {
+  nrows = dim(dataf)[1]
+  y = dataf$y
+  X = dataf[, setdiff(colnames(dataf), "y")]
+  varnames = colnames(X)
+  fmla = paste("y=='pos' ~", paste(varnames, collapse=" + "))
+
+  doperm = function(i) {
+    # random order of rows
+    ord = sample.int(nrows, size=nrows, replace=FALSE)
+    model = glm(fmla, data=cbind(y=y[ord], X),
+                family=binomial(link="logit"))
+    predscore=predict(model, newdata=X, type='response')
+
+    performance_eval(predscore, y[ord], "pos", verbose=FALSE)
+  }
+
+  do.call(rbind, lapply(seq_len(nperm), doperm))
+
+}
+
+plotperm = function(nullframe, trainframe, measure, title='') {
+  ggplot(nullframe, aes_string(x=measure)) + geom_density() +
+    geom_vline(xintercept=trainframe[[measure]], color="red") +
+    ggtitle(paste(title, ":", measure))
+}
+
+#
+# Plot multiple plot objects one one page
+#
+nplot = function(plist, nrow, ncol) {
+  n = length(plist)
+  if(n > nrow*ncol) error(paste("too many plots for a", nrow, "by", ncol, "grid"))
+  grid.newpage()
+  pushViewport(viewport(layout=grid.layout(nrow,ncol)))
+  vplayout=function(x,y) {viewport(layout.pos.row=x, layout.pos.col=y)}
+  i = 1
+  for(irow in 1:nrow) {
+    for(icol in 1:ncol) {
+      if (i > n) break()
+      print(plist[[i]], vp=vplayout(irow, icol))
+      i = i+1
+    }
+  }
+}
+
+#
+# Show an example of a permutation test on a full model
+#
+run_example = function(ngood, nnoise, datasize, nperm, title='') {
+   coefs = mkCoefs(ngood)
+   dTrain = mkData(datasize, coefs, nnoise)
+   varnames = setdiff(colnames(dTrain), "y")
+   fmla = paste("y=='pos' ~", paste(varnames, collapse=" + "))
+   
+   trainmean = mean(dTrain$y=='pos')
+   nulldeviance = get_deviance(dTrain$y=='pos', trainmean)
+   
+   if(ngood > 0) {
+     print("True coefficients of signal variables")
+     print(coefs)
+   }
+   print(paste(title, ": training prevalence = ", trainmean,
+               "null deviance of mean =", nulldeviance))
+   
+   model = glm(fmla, data=dTrain, family=binomial(link="logit"))
+
+  trainpred = predict(model, newdata=dTrain, type="response")
+  trainperf = performance_eval(trainpred,
+                               dTrain$y, "pos", title=paste(title, "Training"))
+
+  #
+  # compare to a hold out set
+  #
+  dTest = mkData(datasize, coefs, nnoise)
+  testpred = predict(model, newdata=dTest, type="response")
+  testperf = performance_eval(testpred,
+                              dTest$y, "pos", title=paste(title, "Test"))
+
+
+  print(paste("Compare training and test performance estimates,", title))
+  perfests = do.call(rbind, list(trainperf, testperf))
+  print(perfests)
+
+  #
+  # do a permutation test on the training data
+  #
+  nullperf = permutation_test(dTrain, 1000)
+
+  print("Training performance compared to permutation test results")
+  print(summary(nullperf))
+  
+  print(paste("Left tail area, deviance", left_tail(trainperf$deviance, nullperf$deviance)))
+  print(paste("Right tail area, accuracy", right_tail(trainperf$accuracy, nullperf$accuracy)))
+  print(paste("Right tail area, precision", right_tail(trainperf$precision, nullperf$precision)))
+  print(paste("Right tail area, recall", right_tail(trainperf$recall, nullperf$recall)))
+
+  nplot(list (plotperm(nullperf, trainperf, "deviance", title),
+              plotperm(nullperf, trainperf, "accuracy", title),
+              plotperm(nullperf, trainperf, "precision", title),
+              plotperm(nullperf, trainperf, "recall", title)), 2, 2)
+}
+
+# --------------------
+# variable selection
+#---------------------
+# these will just use glm and deviance for now
+
+# a crude empirical estimate of the fraction of
+# time that a nulldist score is greater than
+# our score of interest
+right_tail = function(score, nullscores) {
+  num = sum(nullscores >= score)
+  denom = length(nullscores)
+  num/denom
+}
+
+# a crude empirical estimate of the fraction of
+# time that a nulldist score is less than
+# our score of interest
+left_tail = function(score, nullscores) {
+  num = sum(nullscores <= score) 
+  denom = length(nullscores)
+  num/denom
+}
+
+# returns a vector of the permutation tests scores
+# for deviance
+permtest_col = function(col, dataf, nperm) {
+  nrows = dim(dataf)[1]
+  y = dataf$y
+  X = data.frame(x = dataf[[col]])
+  fmla = "(y=='pos') ~ x"
+
+  doperm = function(i) {
+    # random order of rows
+    ord = sample.int(nrows, size=nrows, replace=FALSE)
+    mod = glm(fmla,  data=cbind(y=y[ord], X),
+              family=binomial(link="logit"))
+    # this works because we are predicting on the training data
+    predscore = predict(mod,type="response")
+    get_deviance(y[ord]=='pos', predscore)
+  }
+
+  vapply(seq_len(nperm), doperm, numeric(1))
+}
+
+#
+# Get the scores for the columns of a variable, both
+# by permutation test and by chi-squared estimate
+#
+score_columns = function(dataf, nperm) {
+  ysymbol = "(y=='pos')"
+  varnames = setdiff(colnames(dataf), "y")
+  
+  ylogical = dataf$y=='pos'
+  ymean = mean(ylogical)
+  null_deviance = get_deviance(ylogical, ymean)
+
+  # get the one-variable model scores for every column
+  getscore = function(var) {
+    fmla = paste(ysymbol, var, sep="~")
+    mod = glm(fmla, data=dataf[, c("y", var)],
+              family=binomial(link="logit"))
+    predscore = predict(mod, type="response")
+    get_deviance(dataf$y=='pos', predscore)
+  }
+ 
+  # vector of scores
+  modelscores = vapply(varnames, getscore, numeric(1))
+  names(modelscores) = varnames
+
+  # return the frame of permutation test scores
+  # one for every column of the data frame
+  ptests = data.frame(lapply(varnames,
+                      function(v) {permtest_col(v, dataf,nperm)}))
+
+  colnames(ptests) = varnames
+
+  # now get the tail scores
+  tailareas = vapply(varnames,
+                    function(v) {left_tail(modelscores[v],
+                                            ptests[[v]])},
+                    numeric(1))
+ # names(tailareas) = varnames
+  
+  # get the theoretical significance of a one variable model 
+  # with deviance = dev
+  get_significance = function(dev) {
+    delta_deviance = null_deviance - dev
+    dof = 1
+    sig = pchisq(delta_deviance, dof, lower.tail=FALSE)
+  }
+  
+  # now get the signifcances of each one variable model
+  varsigs = vapply(varnames,
+                   function(v) {get_significance(modelscores[v])},
+                   numeric(1))
+#  names(varsigs) = varnames
+  
+  data.frame(var=varnames, ptail=tailareas, pchi = varsigs)
+}
+
+#
+# Plot the scores of each variable
+#
+scoreplot = function(frm, pcol, threshold, sort=1) {
+  n = dim(frm)[1]
+  frm$var = reorder(frm$var, frm[[pcol]]*sort, FUN=sum)
+  frm$goodvar = frm[[pcol]] < threshold
+
+  breaks = c(0.001, 0.01, 0.05, 0.1, 0.5)
+
+  ggplot(frm, aes_string(x='var', y=pcol, ymin=0, ymax=pcol, color='goodvar')) +
+    geom_pointrange() +
+    geom_hline(yintercept=threshold, color="red", linetype=2) +
+    scale_color_manual(values=c("TRUE"="darkgreen", "FALSE"="darkgray")) +
+    scale_y_log10(breaks=breaks, labels=breaks) +
+    theme(legend.position="none")
+}
+
+run_vs_example = function(ngood, nnoise, datasize, nperm,
+                          threshold, title='', advisory=FALSE) {
+  coefs = mkCoefs(ngood)
+  dTrain = mkData(datasize, coefs, nnoise)
+  varnames = setdiff(colnames(dTrain), "y")
+
+  scores = score_columns(dTrain, nperm)
+  if(ngood+nnoise > 25) sort=-1 else sort=1
+  
+  sp = scoreplot(scores, "ptail", threshold, sort)
+  if(ngood+nnoise > 25) sp = sp + coord_flip()
+  sp = sp + ggtitle(paste(title, ": score by permutation"))
+  print(sp)
+  
+  sp = scoreplot(scores, "pchi", threshold, sort)
+  if(ngood+nnoise > 25) sp = sp + coord_flip()
+  sp = sp + ggtitle(paste(title, ": score by chi-squared"))
+  print(sp)
+
+
+  if(ngood > 0) {
+    print("Coefficients of true signal variables:")
+    print(coefs)
+  }
+  goodvars = scores$var[scores$ptail < threshold]
+  print("Selected variables (permutation):"); print(as.character(goodvars))
+  print("Selected variables (chi-squared):"); print(as.character(scores$var[scores$pchi < threshold]))
+
+  if(advisory) {
+    cutoffs = c(0.01, 0.025, 0.05)
+    varcounts = vapply(cutoffs, function(thresh) {sum(scores < thresh)}, numeric(1))
+    print("Number of selected variables for different thresholds")
+    print(data.frame(threshold=cutoffs, count=varcounts))
+  }
+
+  model_full = glm(paste("(y=='pos') ~", paste(varnames, collapse=" + ")),
+                   dTrain, family=binomial(link="logit"))
+  dTrain$fullpred = predict(model_full, newdata=dTrain, type="response")
+  dTest = mkData(datasize, coefs, nnoise)
+  dTest$fullpred = predict(model_full, newdata=dTest, type="response")
+
+  if(length(goodvars) > 0) {
+    model_reduced = glm(paste("(y=='pos') ~", paste(goodvars, collapse=" + ")),
+                        dTrain, family=binomial(link="logit"))
+    dTrain$redpred = predict(model_reduced, newdata=dTrain, type="response")
+    dTest$redpred = predict(model_reduced, newdata=dTest, type="response")
+  } else {
+    dTrain$redpred = mean(dTrain$y == 'pos')
+    dTest$redpred = mean(dTrain$y == 'pos') # yes, dTrain$y
+    title = paste(title, "reduced model = null model")
+  }
+
+  print(rbind(performance_eval(dTrain$fullpred,dTrain$y, 'pos', title=paste(title, 'full mode, training')),
+              performance_eval(dTrain$redpred,dTrain$y, 'pos', title=paste(title, 'reduced model, training'))))
+
+  print(rbind(performance_eval(dTest$fullpred,dTest$y, 'pos', title=paste(title, 'full model')),
+         performance_eval(dTest$redpred,dTest$y, 'pos', title=paste(title, 'reduced model'))))
+}
+
+```
+
+Run the examples
+
+```{r examples}
+
+set.seed(12959437)
+
+# -- to demonstrate what happens in a case with signal
+# and in a case with no signal
+
+# clean data
+run_example(ngood=10, nnoise=3,
+            datasize=1000, nperm=500, 'Data with signal')
+
+# no signal
+run_example(ngood=0, nnoise=10,
+            datasize=1000, nperm=500, 'Data with no signal')
+
+# bad bayes situation: very wide data with no signal
+run_example(ngood=0, nnoise=300, 
+            datasize=1000, nperm=500, 'Bad Bayes situation')
+
+# -- to demonstrate variable selection
+
+# scoring columns, data with signal
+run_vs_example(ngood=10, nnoise=20,
+               datasize=1000, nperm=200,
+               threshold=0.05, 'Data with signal')
+
+# scoring columns, data with no signal
+run_vs_example(ngood=0, nnoise=30,
+               datasize=1000, nperm=200,
+               threshold=0.05, 'Data with no signal')
+
+# bad bayes situation: very wide data with no signal
+run_vs_example(ngood=0, nnoise=300, 
+            datasize=1000, nperm=200, 
+            threshold=0.01, 'Bad Bayes situation', advisory=TRUE)
+
+```
