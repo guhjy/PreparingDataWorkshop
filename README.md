@@ -20,11 +20,14 @@ To install some of the additional packages you will need your system's compiler 
 The additonal R packages you want installed are the following:
 
 ``` r
-install.packages(c('devtools',
+install.packages(c('caret',
+                   'devtools',
                    'gbm',
+                   'glmnet',
                    'ggplot2',
                    'knitr',
                    'plyr',
+                   'pROC',
                    'reshape2',
                    'snow',
                    'vtreat'))

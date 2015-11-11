@@ -8,7 +8,7 @@ output: html_document
 Example of bad variable starving out good ones.
 
 
-```{r}
+```{r defs}
 # devtools::install_github('WinVector/WVPlots')
 library('WVPlots')
 
@@ -86,7 +86,7 @@ runExample <- function(rows,nSignalFeatures,nNoiseFeatures,trainer,predictor,tit
 ```
 
 
-```{r}
+```{r glm}
 # glm example
 set.seed(123525)   # make result more repeatable
 res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='GLMnet',
@@ -103,7 +103,7 @@ res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='GLMnet',
 
 
 
-```{r}
+```{r glmprcomp}
 # glm principal components example
 set.seed(123525)   # make result more repeatable
 res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='GLM principal components',
@@ -132,7 +132,7 @@ res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='GLM prin
 
 
 
-```{r}
+```{r glmVarSel}
 # glm variable selection example
 set.seed(123525)   # make result more repeatable
 res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='GLM with variable selection',
@@ -155,24 +155,57 @@ res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='GLM with
 ```
 
 
-```{r}
+```{r glmnet}
 # glmnet example
 library('glmnet')
-library('caret')
 set.seed(123525)   # make result more repeatable
-res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='GLM',
+res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='glmnet',
                   trainer=function(yName,varNames,yValues,data) {
-                    model = glmnet(x=as.matrix(data[,varNames,drop=FALSE]),
+                    model = cv.glmnet(x=as.matrix(data[,varNames,drop=FALSE]),
                            y=factor(data[[yName]],levels=yValues),
                            family='binomial',
-                           alpha=0)
+                           alpha=0.1)
                     list(model=model,varNames=varNames)
                   },
                   predictor=function(model,newdata,yValues) { 
                     predict(model$model,
+                            s="lambda.1se",
+                            newx=as.matrix(newdata[,model$varNames,drop=FALSE]),
+                            type='response')
+                  }
+)
+```
+
+
+```{r glmnetcaret, eval=FALSE, echo=FALSE}
+# not working at the moment
+# glmnet with caret example
+library('glmnet')
+library('caret')
+set.seed(123525)   # make result more repeatable
+res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='GLMnet caret',
+                  trainer=function(yName,varNames,yValues,data) {
+                    formula <- as.formula(paste(yName,paste(varNames,collapse=' + '),
+                                                sep=' ~ '))
+                    ctl <- caret::trainControl(method='cv',
+                                               classProbs = TRUE,
+                                               summaryFunction =  caret::twoClassSummary)
+                    y=as.factor(paste('lev',data[[yName]],sep='.'))
+                    model <- caret::train(x=as.matrix(data[,varNames,drop=FALSE]),
+                                          y=y,
+                                          trControl=ctl,
+                                          method = "glmnet",
+                                          metric = "ROC",
+                                          tuneGrid = expand.grid(.alpha = seq(.05, 1, length = 15),
+                                                    .lambda = c((1:5)/10)))
+                    list(model=model,varNames=varNames)
+                  },
+                  predictor=function(model,newdata,yValues) { 
+                    predict(model$model$finalModel,
                             newx=as.matrix(newdata[,model$varNames,drop=FALSE]),
                             type='response')[,yValues[[2]]]
                   }
 )
 ```
+
 
