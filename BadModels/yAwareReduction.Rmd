@@ -19,21 +19,21 @@ mkData <- function(rows,nSignalFeatures,nNoiseFeatures) {
   yData = sample(yValues,replace=TRUE,size=rows)
   d <- data.frame(y=yData,stringsAsFactors=FALSE)
   if(nSignalFeatures>0) {
-    mkRandVar <- function(v) {
-      rnorm(rows) + (as.numeric(yData)-0.5)*rbinom(rows,1,0.3)
+    mkVar <- function(v) {
+      (as.numeric(yData)-0.5)*rbinom(rows,1,0.1)
     }
     varNames <- paste('x',seq_len(nSignalFeatures),sep='_')
-    varValues <- data.frame(lapply(varNames,mkRandVar),
+    varValues <- data.frame(lapply(varNames,mkVar),
                             stringsAsFactors = FALSE)
     colnames(varValues) <- varNames
     d <- cbind(d,varValues)
   }
    if(nNoiseFeatures>0) {
-    mkRandVar <- function(v) {
+    mkVar <- function(v) {
       rnorm(rows,mean=0)
     }
     varNames <- paste('n',seq_len(nNoiseFeatures),sep='_')
-    varValues <- data.frame(lapply(varNames,mkRandVar),
+    varValues <- data.frame(lapply(varNames,mkVar),
                             stringsAsFactors = FALSE)
     colnames(varValues) <- varNames
     d <- cbind(d,varValues)
