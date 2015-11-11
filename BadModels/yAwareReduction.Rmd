@@ -139,7 +139,7 @@ res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='GLM with
                   trainer=function(yName,varNames,yValues,data) {
                     treatment <- vtreat::designTreatmentsC(data,varNames,yName,TRUE,
                                                            verbose=FALSE)
-                    pruneSig = 0.05
+                    pruneSig = 1/length(varNames)
                     dataT <- vtreat::prepare(treatment,data,pruneSig=pruneSig)
                     selvars <- setdiff(colnames(dataT),yName)
                     formula <- as.formula(paste(yName,paste(selvars,collapse=' + '),
