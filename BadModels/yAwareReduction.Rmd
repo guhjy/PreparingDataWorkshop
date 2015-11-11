@@ -89,7 +89,7 @@ runExample <- function(rows,nSignalFeatures,nNoiseFeatures,trainer,predictor,tit
 ```{r glm}
 # glm example
 set.seed(123525)   # make result more repeatable
-res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='GLMnet',
+res <- runExample(rows=800,nSignalFeatures=20,nNoiseFeatures=400,title='glm',
                   trainer=function(yName,varNames,yValues,data) {
                     formula <- as.formula(paste(yName,paste(varNames,collapse=' + '),
                                                 sep=' ~ '))
