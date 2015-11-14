@@ -61,6 +61,19 @@ print(summary(dTrainM))
 ```
 
 
+The above data will not work with many machine learning algorithms (for example logistic regression, or random forests) due to the many NA entries, and the presence of large categoricals.  In addition many R implementations only accept a limited number of independent variable types.  We will perform the minimum amount of "fixing" to make this dataset usable, however the transformations are complicated and in no sense optimal.
+
+What we will do is:
+ 
+ * Change logical to numeric.
+ * Change numeric NA to 0.
+ * Temporarily change all factors to character types (to make sure there are no unused levels).
+ * Change all character NA and levels not seen during training to "" (blank).
+ * Then change all character types to factor (as this is what gbm accepts, though we are using glm).
+ * Limit down only input variabels that have more than one value and categoricals that have no more than 200 values.
+ 
+This "minimal" set of transformations is a bit involved, is not very faithful to the original data, and still may miss corner cases.  This is why this step is worth automating.
+ 
 
 ```{r kdddesign, tidy=FALSE}
 print(date())
