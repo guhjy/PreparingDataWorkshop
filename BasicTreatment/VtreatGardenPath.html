@@ -116,7 +116,7 @@ train = make_data(1000, na_rate, cats$sc_means, cats$sc_probs, cats$lc_means)
 calib = make_data(500, na_rate, cats$sc_means, cats$sc_probs, cats$lc_means)
 calibBig = make_data(2000, na_rate, cats$sc_means, cats$sc_probs, cats$lc_means)
 test = make_data(1000, na_rate, cats$sc_means, cats$sc_probs, cats$lc_means)</code></pre>
-<p>Try to naively fit an lm</p>
+<p>Try to naively fit an lm. We have to guard against levels possibly not showing up in test, and against rows not being scored because of a NA in the input.</p>
 <pre class="r"><code>fmla = &quot;y ~ x1 + x2 + x3&quot;
 model = lm(fmla, data=train)
 
@@ -132,6 +132,7 @@ test$pred = tryCatch(
       error=function(e) {print(e); NULL}
 )
 
+# we have to put a guard here for the test rows where x1 is NA
 rmse = sqrt(mean((test$y - test$pred)^2, na.rm=TRUE))
 print(paste(&quot;mean(y) = &quot;, mean(test$y), &quot;stdev(y) = &quot;, sd(test$y), &quot;rmse = &quot;, rmse))</code></pre>
 <pre><code>## [1] &quot;mean(y) =  2.1481783784283 stdev(y) =  1.73912328881798 rmse =  1.17127237465778&quot;</code></pre>
@@ -145,12 +146,12 @@ varlist = setdiff(colnames(calib), outcome)
 
 # try this with just the default settings
 treatplan = designTreatmentsN(calib, varlist, outcome)</code></pre>
-<pre><code>## [1] &quot;desigining treatments Tue Nov 10 16:04:36 2015&quot;
-## [1] &quot;design var x1 Tue Nov 10 16:04:36 2015&quot;
-## [1] &quot;design var x2 Tue Nov 10 16:04:36 2015&quot;
-## [1] &quot;design var x3 Tue Nov 10 16:04:36 2015&quot;
-## [1] &quot;scoring treatments Tue Nov 10 16:04:36 2015&quot;
-## [1] &quot;have treatment plan Tue Nov 10 16:04:37 2015&quot;</code></pre>
+<pre><code>## [1] &quot;desigining treatments Fri Nov 13 16:29:56 2015&quot;
+## [1] &quot;design var x1 Fri Nov 13 16:29:56 2015&quot;
+## [1] &quot;design var x2 Fri Nov 13 16:29:56 2015&quot;
+## [1] &quot;design var x3 Fri Nov 13 16:29:56 2015&quot;
+## [1] &quot;scoring treatments Fri Nov 13 16:29:56 2015&quot;
+## [1] &quot;have treatment plan Fri Nov 13 16:29:56 2015&quot;</code></pre>
 <pre class="r"><code># look at the score frame
 print(treatplan$scoreFrame)</code></pre>
 <pre><code>##          varName origName varMoves PRESSRsquared         psig          sig
@@ -167,12 +168,12 @@ print(treatplan$scoreFrame)</code></pre>
 <p>The column x3_catN impact codes all the non-rare levels (those that appeared more than 2 times), which individually still don’t occur very often, so the resulting impact model is unreliable; vtreat detects this on cross validation, and assigns a poor significance value to the column.</p>
 <p>A bigger calibration set will mitigate these issues, because individual x3 levels will occur more often.</p>
 <pre class="r"><code>treatplan = designTreatmentsN(calibBig, varlist, outcome)</code></pre>
-<pre><code>## [1] &quot;desigining treatments Tue Nov 10 16:04:37 2015&quot;
-## [1] &quot;design var x1 Tue Nov 10 16:04:37 2015&quot;
-## [1] &quot;design var x2 Tue Nov 10 16:04:37 2015&quot;
-## [1] &quot;design var x3 Tue Nov 10 16:04:37 2015&quot;
-## [1] &quot;scoring treatments Tue Nov 10 16:04:37 2015&quot;
-## [1] &quot;have treatment plan Tue Nov 10 16:04:38 2015&quot;</code></pre>
+<pre><code>## [1] &quot;desigining treatments Fri Nov 13 16:29:56 2015&quot;
+## [1] &quot;design var x1 Fri Nov 13 16:29:56 2015&quot;
+## [1] &quot;design var x2 Fri Nov 13 16:29:56 2015&quot;
+## [1] &quot;design var x3 Fri Nov 13 16:29:56 2015&quot;
+## [1] &quot;scoring treatments Fri Nov 13 16:29:57 2015&quot;
+## [1] &quot;have treatment plan Fri Nov 13 16:29:58 2015&quot;</code></pre>
 <pre class="r"><code>print(treatplan$scoreFrame)</code></pre>
 <pre><code>##          varName origName varMoves PRESSRsquared         psig          sig
 ## 1       x1_clean       x1     TRUE    0.28458888 4.057028e-38 4.057028e-38
@@ -183,8 +184,8 @@ print(treatplan$scoreFrame)</code></pre>
 ## 6        x2_catN       x2     TRUE    0.21580719 3.928847e-28 3.928847e-28
 ## 7        x3_catN       x3     TRUE    0.01764858 2.917130e-03 2.917130e-03</code></pre>
 <p>Takeaway: if you have categorical variables with many levels, you need data sets big enough to see all possible values.</p>
-<p>Notice that for variable x2, we have indicator variables for blue, green, and red (which were common levels), but none for the relatively more rare levels pink and magenta. Assuming that both pink and magenta are non-rare (occur &gt; 2 times) and achieve a minimum significance (set by parameter rareSig = 0.3 by default), their impact on the outcome has been folded into the x2_catN impact model (along with the impacts of red, blue, and green).</p>
-<p>Once you have the treatment plan, you must prepare the data sets.</p>
+<p>Notice that for variable x2, we have indicator variables for blue, green, and red (which were common levels), but none for the relatively more rare levels pink and magenta. Pink and magenta were suppressed either because they were rare (occured rareCount times or fewer), or were deemed insignificant (significance score &gt; rareSig = 0.3 by default). This mean they are not in the scoreFrame table, and they are not included in the impact model (catN or catB variable). All levels derived from a variable, plus the impact coding, are necessarily linear dependent (an undesirable property).</p>
+<p>Once you have the treatment plan, you must prepare the data sets. Note: at this point we can use the pruneSig parameter to further suppress insignificant indicator variables. Having both controls gives us more flexibility in designing impact and indicator variables. For example, we can leave rareSig loose to allow low-significance levels into the impact coding, but then use a stricter pruneSig to suppress their matching indicator variables from the modeling.</p>
 <pre class="r"><code># pruneSig: prune variables with p-value larger than this value. 
 # You can turn off pruning completely with pruneSig=NULL
 # doCollar (default TRUE) restricts numeric variables to be in the range observed in the calibration data

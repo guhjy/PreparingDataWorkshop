@@ -119,9 +119,9 @@ print(treatplan$scoreFrame)
 
 Takeaway: if you have categorical variables with many levels, you need data sets big enough to see all possible values. 
 
-Notice that for variable x2, we have indicator variables for blue, green, and red (which were common levels), but none for the relatively more rare levels pink and magenta. Assuming that both pink and magenta are non-rare (occur > 2 times) and achieve a minimum significance (set by parameter rareSig = 0.3 by default), their impact on the outcome has been folded into the x2_catN impact model (along with the impacts of red, blue, and green).
+Notice that for variable x2, we have indicator variables for blue, green, and red (which were common levels), but none for the relatively more rare levels pink and magenta. Pink and magenta were suppressed either because they were rare (occured rareCount times or fewer), or were deemed insignificant (significance score > rareSig = 0.3 by default). This mean they are not in the scoreFrame table, and they are not included in the impact model (catN or catB variable). All levels derived from a variable, plus the impact coding, are necessarily linear dependent (an undesirable property).  
 
-Once you have the treatment plan, you must prepare the data sets.
+Once you have the treatment plan, you must prepare the data sets. Note: at this point we can use the pruneSig parameter to further suppress insignificant indicator variables. Having both controls gives us more flexibility in designing impact and indicator variables. For example, we can leave rareSig loose to allow low-significance levels into the impact coding, but then use a stricter pruneSig to suppress their matching indicator variables from the modeling.
 
 ```{r prepare}
 # pruneSig: prune variables with p-value larger than this value. 
