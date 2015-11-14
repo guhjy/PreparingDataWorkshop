@@ -132,9 +132,7 @@ test_treat = prepare(treatplan, test, pruneSig=0.05, doCollar=FALSE)
 
 print(colnames(train_treat))
 
-# in this case, we can check that magenta and pink levels fail the rareSig test, so they
-# are also not folded into the catN variable, which will therefore be colinear with the 
-# indicator variables. Since we're doing an lm(), don't use the catN variable
+# Since we're doing an lm(), don't use the catN variable (because it is colinear with the indicator variables)
 vars = setdiff(colnames(train_treat), c(outcome, "x2_catN"))
 
 fmla = paste(outcome, paste(vars, collapse=" + "), sep = " ~ ")

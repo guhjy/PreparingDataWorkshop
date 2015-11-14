@@ -146,12 +146,12 @@ varlist = setdiff(colnames(calib), outcome)
 
 # try this with just the default settings
 treatplan = designTreatmentsN(calib, varlist, outcome)</code></pre>
-<pre><code>## [1] &quot;desigining treatments Fri Nov 13 16:29:56 2015&quot;
-## [1] &quot;design var x1 Fri Nov 13 16:29:56 2015&quot;
-## [1] &quot;design var x2 Fri Nov 13 16:29:56 2015&quot;
-## [1] &quot;design var x3 Fri Nov 13 16:29:56 2015&quot;
-## [1] &quot;scoring treatments Fri Nov 13 16:29:56 2015&quot;
-## [1] &quot;have treatment plan Fri Nov 13 16:29:56 2015&quot;</code></pre>
+<pre><code>## [1] &quot;desigining treatments Fri Nov 13 16:33:25 2015&quot;
+## [1] &quot;design var x1 Fri Nov 13 16:33:25 2015&quot;
+## [1] &quot;design var x2 Fri Nov 13 16:33:25 2015&quot;
+## [1] &quot;design var x3 Fri Nov 13 16:33:25 2015&quot;
+## [1] &quot;scoring treatments Fri Nov 13 16:33:25 2015&quot;
+## [1] &quot;have treatment plan Fri Nov 13 16:33:25 2015&quot;</code></pre>
 <pre class="r"><code># look at the score frame
 print(treatplan$scoreFrame)</code></pre>
 <pre><code>##          varName origName varMoves PRESSRsquared         psig          sig
@@ -168,12 +168,12 @@ print(treatplan$scoreFrame)</code></pre>
 <p>The column x3_catN impact codes all the non-rare levels (those that appeared more than 2 times), which individually still don’t occur very often, so the resulting impact model is unreliable; vtreat detects this on cross validation, and assigns a poor significance value to the column.</p>
 <p>A bigger calibration set will mitigate these issues, because individual x3 levels will occur more often.</p>
 <pre class="r"><code>treatplan = designTreatmentsN(calibBig, varlist, outcome)</code></pre>
-<pre><code>## [1] &quot;desigining treatments Fri Nov 13 16:29:56 2015&quot;
-## [1] &quot;design var x1 Fri Nov 13 16:29:56 2015&quot;
-## [1] &quot;design var x2 Fri Nov 13 16:29:56 2015&quot;
-## [1] &quot;design var x3 Fri Nov 13 16:29:56 2015&quot;
-## [1] &quot;scoring treatments Fri Nov 13 16:29:57 2015&quot;
-## [1] &quot;have treatment plan Fri Nov 13 16:29:58 2015&quot;</code></pre>
+<pre><code>## [1] &quot;desigining treatments Fri Nov 13 16:33:25 2015&quot;
+## [1] &quot;design var x1 Fri Nov 13 16:33:25 2015&quot;
+## [1] &quot;design var x2 Fri Nov 13 16:33:25 2015&quot;
+## [1] &quot;design var x3 Fri Nov 13 16:33:25 2015&quot;
+## [1] &quot;scoring treatments Fri Nov 13 16:33:26 2015&quot;
+## [1] &quot;have treatment plan Fri Nov 13 16:33:27 2015&quot;</code></pre>
 <pre class="r"><code>print(treatplan$scoreFrame)</code></pre>
 <pre><code>##          varName origName varMoves PRESSRsquared         psig          sig
 ## 1       x1_clean       x1     TRUE    0.28458888 4.057028e-38 4.057028e-38
@@ -195,9 +195,7 @@ test_treat = prepare(treatplan, test, pruneSig=0.05, doCollar=FALSE)
 print(colnames(train_treat))</code></pre>
 <pre><code>## [1] &quot;x1_clean&quot;       &quot;x1_isBAD&quot;       &quot;x2_lev_x.blue&quot;  &quot;x2_lev_x.green&quot;
 ## [5] &quot;x2_lev_x.red&quot;   &quot;x2_catN&quot;        &quot;x3_catN&quot;        &quot;y&quot;</code></pre>
-<pre class="r"><code># in this case, we can check that magenta and pink levels fail the rareSig test, so they
-# are also not folded into the catN variable, which will therefore be colinear with the 
-# indicator variables. Since we're doing an lm(), don't use the catN variable
+<pre class="r"><code># Since we're doing an lm(), don't use the catN variable (because it is colinear with the indicator variables)
 vars = setdiff(colnames(train_treat), c(outcome, &quot;x2_catN&quot;))
 
 fmla = paste(outcome, paste(vars, collapse=&quot; + &quot;), sep = &quot; ~ &quot;)
