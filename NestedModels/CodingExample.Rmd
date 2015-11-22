@@ -181,9 +181,8 @@ isCal <- runif(nrow(dTrain))<0.5
 dTrainC <- dTrain[isCal,]
 dTrainT <- dTrain[!isCal,]
 treatments <- vtreat::designTreatmentsC(dTrainC,vars,yName,TRUE,
-                                        rareSig=0.3,
+                                        rareSig=1.0,
                                         smFactor=5.0,
-                                        minFraction=2.0,
                                         verbose=FALSE,
                                         parallelCluster=cl)
 print(treatments$scoreFrame)
@@ -204,16 +203,15 @@ print(WVPlots::DoubleDensityPlot(dTestV,'pred',yName,
 
 
 
-We can use all our data for both 
+We can also use all our data for both 
 encoding construction and training prune out rare levels before they
 are allowed into the transformed variables.
 
 ```{r}
-print("vtreat model")
+print("vtreat prune model")
 treatments <- vtreat::designTreatmentsC(dTrain,vars,yName,TRUE,
                                         rareSig=0.3,
                                         smFactor=5.0,
-                                        minFraction=2.0,
                                         verbose=FALSE,
                                         parallelCluster=cl)
 print(treatments$scoreFrame)
@@ -226,14 +224,51 @@ formulaV <- paste(yName,paste(varsV,collapse=' + '),sep=' ~ ')
 modelV <- glm(formulaV,data=dTrainV,family=binomial(link='logit'))
 dTrainV$pred <- predict(modelV,newdata=dTrainV,type='response')
 print(WVPlots::ROCPlot(dTrainV,'pred',yName,
-                       paste('vtreat model train')))
+                       paste('vtreat prune model train')))
 dTestV$pred <- predict(modelV,newdata=dTestV,type='response')
 print(errorRate(dTestV$pred,dTestV[[yName]]))
 print(WVPlots::ROCPlot(dTestV,'pred',yName,
-                       paste('vtreat model test')))
+                       paste('vtreat prune model test')))
 print(WVPlots::DoubleDensityPlot(dTestV,'pred',yName,
-                       paste('vtreat model test')))
+                       paste('vtreat prune model test')))
 ```
+
+Or we can try a "cross method" which approximates the Jacknife methods by building a special training
+frame that has not been produced by the returned vtreat treatments (requires vtreat 0.5.22 or newer for 
+)
+
+```{r}
+# devtools::install_github("WinVector/vtreat")  # to get 0.5.22 version with vtreat::mkCrossFrameCExperiment()
+# library('vtreat')
+
+print("vtreat cross model")
+crossExpmt <- vtreat::mkCrossFrameCExperiment(dTrain,vars,yName,TRUE,
+                                        rareSig=1.0,
+                                        smFactor=5.0,
+                                        parallelCluster=cl)
+treatments <- crossExpmt$treatments
+dTrainV <- crossExpmt$crossFrame
+print(treatments$scoreFrame)
+varsV <- treatments$scoreFrame$varName[treatments$scoreFrame$sig<=0.05]
+dTestV <- vtreat::prepare(treatments,dTest,pruneSig=c(),
+                          varRestriction=varsV,
+                          parallelCluster=cl)
+formulaV <- paste(yName,paste(varsV,collapse=' + '),sep=' ~ ')
+modelV <- glm(formulaV,data=dTrainV,family=binomial(link='logit'))
+dTrainV$pred <- predict(modelV,newdata=dTrainV,type='response')
+print(WVPlots::ROCPlot(dTrainV,'pred',yName,
+                       paste('vtreat cross model train')))
+dTestV$pred <- predict(modelV,newdata=dTestV,type='response')
+print(errorRate(dTestV$pred,dTestV[[yName]]))
+print(WVPlots::ROCPlot(dTestV,'pred',yName,
+                       paste('vtreat cross model test')))
+print(WVPlots::DoubleDensityPlot(dTestV,'pred',yName,
+                       paste('vtreat cross model test')))
+```
+
+
+The point is, many variations work well.
+
 
 
 Also Misha Bilenko introduced an [application of differential privacy](http://conf.dato.com/speakers/dr-misha-bilenko/)
