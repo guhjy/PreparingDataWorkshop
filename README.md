@@ -5,21 +5,23 @@ These are instructions how to prepare to work along with the examples from the w
 
 > "Preparing Data for Analysis using R: Basic through Advanced Techniques (WORKSHOP)" John Mount & Nina Zumel, Win-Vector, LLC [ODSC 2015](http://opendatascicon.com/detailed-schedule/#day1).
 >
-> Sabstract for "Preparing data for analysis using R: basic through advanced techniques" John Mount / Nina Zumel.
+> Complete video [here](https://www.youtube.com/watch?v=Dd6idYl8mu8)
+>
+> Abstract for "Preparing data for analysis using R: basic through advanced techniques" John Mount / Nina Zumel.
 >
 > Data quality is the biggest determiner of data science project success or failure. Preparing data for analysis is one of the most important, laborious, and yet neglected aspects of data science. Many of the routine steps can be automated in a principled manner. This workshop will lay out the fundamentals of preparing data and provide interactive demonstrations in the open source R analysis environment. We will cover what commonly goes wrong, and how to detect and fix it. Participants can download materials from <https://github.com/WinVector/PreparingDataWorkshop> and either follow along during the workshop, or at their leisure. We will work examples using R ( <https://cran.r-project.org> ), RStudio ( <https://www.rstudio.com> ), and a few packages (named in README.md on the Github repository). Participants can re-run all the demonstrations whenever they want.
 
-You will want to download all files in this Github repository, and prepare your machine before trying the exampels. Please be patient as we are putting these instructions together as we finish and polish our workshop, so there may be some changes prior to the workshop.
+You will want to download all files in this Github repository, and prepare your machine before trying the examples. Please be patient as we are putting these instructions together as we finish and polish our workshop, so there may be some changes prior to the workshop.
 
 To run all of the examples you will need a machine with a current version of [R](https://cran.r-project.org), and [RStudio](https://www.rstudio.com) installed.
 
-To install some of the additional packages you will need your system's compiler tools installed (often c,c++, and fortran). How to do this varies by system and is beyond the scope of the worksop.
+To install some of the additional packages you will need your system's compiler tools installed (often c,c++, and FORTRAN). How to do this varies by system and is beyond the scope of the workshop.
 
 -   On Linux it is a matter of installing the correct development packages (some Ubuntu instructions [here](https://github.com/JohnMount/ec2R/blob/master/ec2steps.bash)).
--   On OSX you need [XCode](https://developer.apple.com/xcode/) and ["commmand line tools"](http://www.cnet.com/how-to/install-command-line-developer-tools-in-os-x/) installed and active.
+-   On OSX you need [XCode](https://developer.apple.com/xcode/) and ["command line tools"](http://www.cnet.com/how-to/install-command-line-developer-tools-in-os-x/) installed and active.
 -   On windows you may need [RTools](https://cran.r-project.org/bin/windows/Rtools/) and/or [Microsoft Visual Studio](https://msdn.microsoft.com/en-us/vstudio/cc136611.aspx).
 
-The additonal R packages you want installed are the following:
+The additional R packages you want installed are the following:
 
 ``` r
 install.packages(c('caret',
