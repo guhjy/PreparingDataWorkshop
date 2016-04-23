@@ -40,4 +40,4 @@ install.packages(c('caret',
 devtools::install_github('WinVector/WVPlots')
 ```
 
-Much of this material was presented at [ODSC 2015](http://opendatascicon.com/detailed-schedule/#day1) ([complete video here](https://www.youtube.com/watch?v=Dd6idYl8mu8), [slides here](https://github.com/WinVector/PreparingDataWorkshop/ODSC_2015_Slides)).
+Much of this material was presented at ODSC 2015 ([complete video here](https://www.youtube.com/watch?v=Dd6idYl8mu8), [slides here](https://github.com/WinVector/PreparingDataWorkshop/tree/master/ODSC_2015_Slides)).
