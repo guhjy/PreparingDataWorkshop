@@ -1,0 +1,125 @@
+---
+title: "CrossFrameOperators"
+author: "Win-Vector LLC"
+date: "April 22, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("magrittr")
+library("dplyr")
+library("vtreat") # need version 0.5.23 or newer: available here: https://github.com/WinVector/vtreat 
+```
+
+```{r defineprimatives}
+# supply uniform interface fit and predict.
+# to use other fitters change these functions
+fitModel <- function(data,formula) {
+  lm(formula,data)
+}
+
+applyModel <- function(model,newdata) {
+  predict(model,newdata=newdata)
+}
+
+# down stream application, in our case computing
+# unadjusted in-sample R^2.  In super learning
+# could be a derived model over many input columns.
+rsq <- function(pred,y) {
+  1-sum((y-pred)^2)/sum((y-mean(y))^2)
+}
+```
+
+```{r makeexampledata}
+set.seed(2352356)
+# example data, intentionally no relation
+d <- data.frame(x=rnorm(5),y=rnorm(5))
+```
+
+Standard "fit and apply" pattern.
+
+```{r classicfitandpredict}
+d %>% fitModel(y~x) -> modelToReturn
+modelToReturn %>% applyModel(newdata=d) -> predictions
+# unadjusted R^2 above zero (misleading)
+rsq(predictions,d$y)
+```
+
+Define a general procedure for simulated out of sample results by cross validating
+for any model that defines a _fitModel_, _applyModel_ pair.
+
+```{r outofsamplefitandpredict}
+#' Simulate out of sample fitting and application.
+#'
+#' @param d data.frame to work with
+#' @param modelsToFit list of list(fitModel,formula,applyModel,modelName) triples to apply
+#' @return data frame with derived predictions (in cross-validated manner to simulate out of sample training and application).
+#'
+simulateOutOfSampleTrainEval <- function(d,modelsToFit) {
+  eSets <- vtreat::buildEvalSets(nrow(d))
+  preds <- lapply(modelsToFit,
+                  function(pi) {
+                    # could parallelize the next step
+                    evals <- lapply(eSets, 
+                                    function(ei) { 
+                                      d[ei$train,] %>% pi$fitModel(pi$formula) %>% 
+                                        pi$applyModel(d[ei$app,])
+                                    })
+                    # re-assemble results into original row order
+                    pred <- numeric(nrow(d))
+                    for(eii in seq_len(length(eSets))) {
+                      pred[eSets[[eii]]$app] <- evals[[eii]]
+                    }
+                    pred <- data.frame(x=pred,stringsAsFactors = FALSE)
+                    colnames(pred) <- pi$modelName
+                    pred
+                  })
+  dplyr::bind_cols(preds)
+}
+```
+
+Cross-validated fit and apply pattern (safe for nesting models, as in variable 
+treatment or in super learning).  With the above function these cross-validated
+procedures are not harder to apply that standard in-sample procedures (though
+there is some runtime cost).
+
+```{r superpattern}
+modelsToFit <- list(
+  list(fitModel=fitModel,
+       formula=y~x,
+       applyModel=applyModel,
+       modelName='linearRegression'))
+
+d %>% fitModel(y~x) -> modelToReturn
+d %>% simulateOutOfSampleTrainEval(modelsToFit) -> predout
+# out of sample R^2 below zero, not misleading.
+rsq(predout$linearRegression,d$y)
+```
+
+In a super learning context we would use _simulateOutOfSampleTrainEval_ to fit
+a family of models and assemble their results into a data frame for additional fitting.
+
+
+For nested modeling (or stacking / super-learning) the above procedure looks like
+the following.
+
+<img src="superX.png" width="600">
+
+Data-adaptive variable preparation is also essentially modeling.  So any modeling that
+involves such preparation is essentially a nested model. Proper training procedures
+for nested models involves different (or fresh) data for each stage or simulating 
+such data through cross-validation methods.
+
+For data treatment the procedure looks like the following.
+
+<img src="vtreatX.png" width="600">
+
+[vtreat](https://github.com/WinVector/vtreat) handles this directly through its
+_mkCrossFrameCExperiment_ and _mkCrossFrameNExperiment_ methods (and exposes the
+_buildEvalSets_ method we used in our explicit examples here).
+
+
+
+
+

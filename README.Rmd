@@ -11,13 +11,19 @@ output:
 These are instructions how to prepare to work along with the examples from the workshop:
 
 > "Preparing Data for Analysis using R: Basic through Advanced Techniques (WORKSHOP)"
-John Mount & Nina Zumel, Win-Vector, LLC 
+authors: John Mount & Nina Zumel, Win-Vector, LLC 
 >
 > Abstract for "Preparing data for analysis using R: basic through advanced techniques" John Mount / Nina Zumel.
 >
-> Data quality is the biggest determiner of data science project success or failure.    Preparing data for analysis is one of the most important, laborious, and yet neglected aspects of data science.  Many of the routine steps can be automated in a principled manner.  This workshop will lay out the fundamentals of preparing data and provide interactive demonstrations in the open source R analysis environment.  We will cover what commonly goes wrong, and how to detect and fix it.  Participants can download materials from https://github.com/WinVector/PreparingDataWorkshop and either follow along during the workshop, or at their leisure.  We will work examples using  R  ( https://cran.r-project.org ), RStudio ( https://www.rstudio.com ), and a few packages (named in README.md on the Github repository).  Participants can re-run all the demonstrations whenever they want.
+> Data quality is the biggest determiner of data science project success or failure.    Preparing data for analysis is one of the most important, laborious, and yet neglected aspects of data science.  Many of the routine steps can be automated in a principled manner.  This workshop will lay out the fundamentals of preparing data and provide interactive demonstrations in the open source R analysis environment.
+>
+> We will cover what commonly goes wrong, and how to detect and fix it.  We start with seemingly operational issues (many variables, "wide data", missing values, large cardinality categoricals, novel categorical levels) and how to correct them in in real world data.  We work through this and demonstrate that careless correction of these issues can lead to statistically invalid machine learning procedures that give poor results in production.  We then introduce automated procedures that are both practical and statistically valid.
+>
+> We show that "y aware pre-processing" is required to reliably pre-process data for analysis and that such pre-processing is statistically unpopular as it breaks the common statistical precautions such as test/train split and cross validation.  We then demonstrate how "simulated out of sample" procedures "or cross frame procedures" (as used in super-learning and stacking) are sufficient to allow powerful "y aware pre-processing" and nested models in a statistically sound manner.  With better statistical procedures more powerful tools can be reliably used leading to better predictive modeling results.
+>
+> Participants can download materials from https://github.com/WinVector/PreparingDataWorkshop and either follow along during the workshop, or at their leisure.  We will work examples using  R  ( https://cran.r-project.org ), RStudio ( https://www.rstudio.com ), and a few packages (named in README.md on the Github repository).  Participants can re-run all the demonstrations whenever they want.
 
-You will want to download all files in this Github repository, and prepare your machine before trying the examples.  Please be patient as we are putting these instructions together as we finish and polish our workshop, so there may be some changes prior to the workshop.
+You can download all files in this Github repository, and prepare your machine before trying the examples.  In the workshop we will walk through all examples as pre-prepared knitr or R markdown sheets, so it will not be necissary to bring a laptop to attend the workshop.
 
 To run all of the examples you will need a machine with a current version of [R](https://cran.r-project.org), and [RStudio](https://www.rstudio.com) installed.
 
@@ -48,5 +54,8 @@ install.packages(c('caret',
                    'vtreat'))
 devtools::install_github('WinVector/WVPlots')
 ```
+
+John Mount will be presenting and co-author Nina Zumel has (with the generous
+sponsorhip of Microsoft) prepared a whitepaper outlining the material (available [here](http://winvector.github.io/DataPrep/EN-CNTNT-Whitepaper-Data-Prep-Using-R.pdf)).
 
 Much of this material was presented at ODSC 2015 ([complete video here](https://www.youtube.com/watch?v=Dd6idYl8mu8), [slides here](https://github.com/WinVector/PreparingDataWorkshop/tree/master/ODSC_2015_Slides)).
