@@ -163,7 +163,12 @@ print(DoubleDensityPlot(treatedTrainP, mname, yName,
                         title=t1))
 print(ROCPlot(treatedTrainP, mname, yName, 
               title=t1))
+```
 
+Now plot on test.  We are seeing over-fitting (even with a glm) due
+to the large number of variables.  
+
+```{r plot test}
 t2 = paste(mname,'test data')
 print(DoubleDensityPlot(treatedTestP, mname, yName, 
                         title=t2))
@@ -171,3 +176,11 @@ print(ROCPlot(treatedTestP, mname, yName,
               title=t2))
 print(date())
 ```
+
+Practical Data Science with R's
+demonstration avoided this over-fit by pruning variables in a y-away way on a
+set disjoint from the preperation set.  
+
+We have documented and automated a consistent workflow using 
+_vtreat::mkCrossFrameCExperiment_ that extracts as much fitting power as practical.
+
