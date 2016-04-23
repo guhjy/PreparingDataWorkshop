@@ -3,9 +3,7 @@
 
 These are instructions how to prepare to work along with the examples from the workshop:
 
-> "Preparing Data for Analysis using R: Basic through Advanced Techniques (WORKSHOP)" John Mount & Nina Zumel, Win-Vector, LLC [ODSC 2015](http://opendatascicon.com/detailed-schedule/#day1).
->
-> Complete video [here](https://www.youtube.com/watch?v=Dd6idYl8mu8)
+> "Preparing Data for Analysis using R: Basic through Advanced Techniques (WORKSHOP)" John Mount & Nina Zumel, Win-Vector, LLC
 >
 > Abstract for "Preparing data for analysis using R: basic through advanced techniques" John Mount / Nina Zumel.
 >
@@ -41,3 +39,5 @@ install.packages(c('caret',
                    'vtreat'))
 devtools::install_github('WinVector/WVPlots')
 ```
+
+Much of this material was presented at [ODSC 2015](http://opendatascicon.com/detailed-schedule/#day1) ([complete video here](https://www.youtube.com/watch?v=Dd6idYl8mu8), [slides here](https://github.com/WinVector/PreparingDataWorkshop/ODSC_2015_Slides)).
