@@ -13,6 +13,7 @@ library('gbm')
 #library('class')
 library('ggplot2')
 library('glmnet')
+library('xgboost')
 
 
 # load the data as in the book
@@ -105,7 +106,7 @@ treatedTestP = treatedTest[, yName, drop=FALSE]
 
 
 formulaS = paste(yName,paste(selvars,collapse=' + '),sep=' ~ ')
-for(mname in c('glmPred','gbmPred')) {
+for(mname in c('glmPred','gbmPred','xgboost')) {
   print("*****************************")
   print(date())
   print(paste(mname,length(selvars)))
@@ -123,15 +124,23 @@ for(mname in c('glmPred','gbmPred')) {
    treatedTestP[[mname]] = predict(modelGBMs,
                                     newdata=treatedTest,type='response',
                                     n.trees=nTrees)
-  } else {
+  } else if(mname=='glmPred') {
     modelglms = cv.glmnet(x = as.matrix(treatedTrainM[,selvars,drop=FALSE]),
-                       y = treatedTrainM[[yName]],
-                    alpha=0.5,
-                    family='binomial')
+                          y = treatedTrainM[[yName]],
+                          alpha=0.5,
+                          family='binomial')
     #print(summary(modelglms))
-     treatedTestP[[mname]] = as.numeric(predict(modelglms,
-                                    newx=as.matrix(treatedTest[,selvars,drop=FALSE]),
-                                    type='response'))
+    treatedTestP[[mname]] = as.numeric(predict(modelglms,
+                                              newx=as.matrix(treatedTest[,selvars,drop=FALSE]),
+                                              type='response'))
+  } else if(mname=='xgboost') {
+    modelxg = xgboost(data=xgb.DMatrix(as.matrix(treatedTrainM[,selvars,drop=FALSE]),
+                                       label=treatedTrainM[[yName]]),
+                      objective='binary:logistic', 
+                      nrounds=100,
+                      nthread=parallel::detectCores())
+    treatedTestP[[mname]] = as.numeric(predict(modelxg,
+                                               as.matrix(treatedTest[,selvars,drop=FALSE])))
   }
   
   t2 = paste(mname,'test data')
