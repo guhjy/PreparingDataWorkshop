@@ -18,6 +18,38 @@ you are keeping the same design matrix and only changing the y vector.
 ```{r functions}
 library('WVPlots') # library here: https://github.com/WinVector/WVPlots
 
+#' Copy arguments into env and re-bind any function's lexical scope to bindTargetEnv .
+#' 
+#' See http://winvector.github.io/Parallel/PExample.html for example use.
+#' 
+#' 
+#' Used to send data along with a function in situations such as parallel execution 
+#' (when the global environment would not be available).  Typically called within 
+#' a function that constructs the worker function to pass to the parallel processes
+#' (so we have a nice lexical closure to work with).
+#' 
+#' @param bindTargetEnv environment to bind to
+#' @param objNames additional names to lookup in parent environment and bind
+#' @param names of functions to NOT rebind the lexical environments of
+bindToEnv <- function(bindTargetEnv=parent.frame(),objNames,doNotRebind=c()) {
+  # Bind the values into environment
+  # and switch any functions to this environment!
+  for(var in objNames) {
+    val <- get(var,envir=parent.frame())
+    if(is.function(val) && (!(var %in% doNotRebind))) {
+      # replace function's lexical environment with our target (DANGEROUS)
+      environment(val) <- bindTargetEnv
+    }
+    # assign object to target environment, only after any possible alteration
+    assign(var,val,envir=bindTargetEnv)
+  }
+}
+
+parallelCl = parallel::makeCluster(parallel::detectCores())
+
+
+
+
 
 mkCoefs = function(ngood) {
   if(ngood < 1) return(c())
@@ -128,24 +160,27 @@ performance_eval = function(predScore, truth, posclass,
 
 # return a frame of the different metrics on the permuted data
 permutation_test = function(dataf, nperm) {
-  nrows = dim(dataf)[1]
-  y = dataf$y
-  X = dataf[, setdiff(colnames(dataf), "y")]
-  varnames = colnames(X)
-  fmla = paste("y=='pos' ~", paste(varnames, collapse=" + "))
-
-  doperm = function(i) {
-    # random order of rows
-    ord = sample.int(nrows, size=nrows, replace=FALSE)
-    model = glm(fmla, data=cbind(y=y[ord], X),
-                family=binomial(link="logit"))
-    predscore=predict(model, newdata=X, type='response')
-
-    performance_eval(predscore, y[ord], "pos", verbose=FALSE)
+  mkWorker = function() {
+    bindToEnv(objNames=c('glm_significance','performance_eval','get_deviance'))
+    nrows = dim(dataf)[1]
+    y = dataf$y
+    X = dataf[, setdiff(colnames(dataf), "y")]
+    varnames = colnames(X)
+    fmla = paste("y=='pos' ~", paste(varnames, collapse=" + "))
+    
+    function(i) {
+      # random order of rows
+      ord = sample.int(nrows, size=nrows, replace=FALSE)
+      model = glm(fmla, data=cbind(y=y[ord], X),
+                  family=binomial(link="logit"))
+      predscore=predict(model, newdata=X, type='response')
+      
+      performance_eval(predscore, y[ord], "pos", verbose=FALSE)
+    }
   }
-
-  do.call(rbind, lapply(seq_len(nperm), doperm))
-
+  doperm = mkWorker()
+  prlist = parallel::parLapply(parallelCl,seq_len(nperm), doperm)
+  as.data.frame(dplyr::bind_rows(prlist),stringsAsFactors=FALSE)
 }
 
 plotperm = function(nullframe, trainframe, measure, title='') {
@@ -256,22 +291,26 @@ left_tail = function(score, nullscores) {
 # returns a vector of the permutation tests scores
 # for deviance
 permtest_col = function(col, dataf, nperm) {
-  nrows = dim(dataf)[1]
-  y = dataf$y
-  X = data.frame(x = dataf[[col]])
-  fmla = "(y=='pos') ~ x"
-
-  doperm = function(i) {
-    # random order of rows
-    ord = sample.int(nrows, size=nrows, replace=FALSE)
-    mod = glm(fmla,  data=cbind(y=y[ord], X),
-              family=binomial(link="logit"))
-    # this works because we are predicting on the training data
-    predscore = predict(mod,type="response")
-    get_deviance(y[ord]=='pos', predscore)
+  mkWorker = function() {
+    bindToEnv(objNames=c('glm_significance','performance_eval','get_deviance'))
+    nrows = dim(dataf)[1]
+    y = dataf$y
+    X = data.frame(x = dataf[[col]])
+    fmla = "(y=='pos') ~ x"
+    
+    doperm = function(i) {
+      # random order of rows
+      ord = sample.int(nrows, size=nrows, replace=FALSE)
+      mod = glm(fmla,  data=cbind(y=y[ord], X),
+                family=binomial(link="logit"))
+      # this works because we are predicting on the training data
+      predscore = predict(mod,type="response")
+      get_deviance(y[ord]=='pos', predscore)
+    }
   }
-
-  vapply(seq_len(nperm), doperm, numeric(1))
+  doperm = mkWorker()
+  prlist = parallel::parLapply(parallelCl,seq_len(nperm),doperm)
+  as.numeric(prlist)
 }
 
 #
@@ -344,7 +383,6 @@ scoreplot = function(frm, pcol, threshold, sort=1) {
     geom_pointrange() +
     geom_hline(yintercept=threshold, color="red", linetype=2) +
     scale_color_manual(values=c("TRUE"="darkgreen", "FALSE"="darkgray")) +
-    scale_y_log10(breaks=breaks, labels=breaks) +
     theme(legend.position="none")
 }
 
@@ -412,39 +450,68 @@ run_vs_example = function(ngood, nnoise, datasize, nperm,
 Run the examples
 
 ```{r examples}
-
 set.seed(12959437)
 
 # -- to demonstrate what happens in a case with signal
 # and in a case with no signal
+```
 
+
+---------------------------------------
+
+Mostly signal.
+
+```{r excleandata}
 # clean data
 run_example(ngood=10, nnoise=3,
             datasize=1000, nperm=500, 'Data with signal')
+```
 
+
+---------------------------------------
+
+No signal.
+
+```{r exnosignal}
 # no signal
 run_example(ngood=0, nnoise=10,
             datasize=1000, nperm=500, 'Data with no signal')
+```
 
+
+---------------------------------------
+
+Bad Bayes: no signal.
+
+```{r exbadbayes}
 # bad bayes situation: very wide data with no signal
 run_example(ngood=0, nnoise=300, 
             datasize=1000, nperm=500, 'Bad Bayes situation')
+```
 
+
+---------------------------------------
+
+Some signal.
+
+```{r scdws}
 # -- to demonstrate variable selection
 
 # scoring columns, data with signal
 run_vs_example(ngood=10, nnoise=20,
                datasize=1000, nperm=200,
                threshold=0.05, 'Data with signal')
+```
 
+
+---------------------------------------
+
+No signal.
+
+```{r scdwns}
 # scoring columns, data with no signal
 run_vs_example(ngood=0, nnoise=30,
                datasize=1000, nperm=200,
                threshold=0.05, 'Data with no signal')
-
-# bad bayes situation: very wide data with no signal
-run_vs_example(ngood=0, nnoise=300, 
-            datasize=1000, nperm=200, 
-            threshold=0.01, 'Bad Bayes situation', advisory=TRUE)
-
 ```
+
