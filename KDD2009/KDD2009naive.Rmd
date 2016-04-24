@@ -7,6 +7,10 @@ output: html_document
 
 [KDD2009 naive example](http://www.sigkdd.org/kdd-cup-2009-customer-relationship-prediction).  Winners had hold-out AUC of 0.7611 on churn.   See [here](https://github.com/WinVector/zmPDSwR/tree/master/KDD2009) for more details.
 
+This file is now not to do things (fixing problems as you find them).  Instead use a
+systmetic variable tranformer such as [vtreat](https://github.com/WinVector/vtreat).
+
+
 ```{r kddexlibs, tidy=FALSE}
 print(date())
 #load some libraries
@@ -18,6 +22,7 @@ library('WVPlots')
 library('parallel')
 library('gbm')
 library('ggplot2')
+library('glmnet')
 
 
 # load the data as in the book
@@ -61,7 +66,7 @@ print(summary(dTrainM))
 ```
 
 
-The above data will not work with many machine learning algorithms (for example logistic regression, or random forests) due to the many NA entries, and the presence of large categoricals.  In addition many R implementations only accept a limited number of independent variable types.  We will perform the minimum amount of "fixing" to make this dataset usable, however the transformations are complicated and in no sense optimal.
+The above data will not work with many machine learning algorithms (for example logistic regression, or random forests) due to implementations not liking at least one the many NA entries, and the presence of large categoricals.  In addition many R implementations only accept a limited number of independent variable types.  We will perform the minimum amount of "fixing" to make this dataset usable, however the transformations are complicated and in no sense optimal.
 
 What we will do is:
  
@@ -70,7 +75,7 @@ What we will do is:
  * Temporarily change all factors to character types (to make sure there are no unused levels).
  * Change all character NA and levels not seen during training to "" (blank).
  * Then change all character types to factor (as this is what gbm accepts, though we are using glm).
- * Limit down only input variabels that have more than one value and categoricals that have no more than 200 values.
+ * Limit down only input variables that have more than one value and categoricals that have no more than 200 values.
  
 This "minimal" set of transformations is a bit involved, is not very faithful to the original data, and still may miss corner cases.  This is why this step is worth automating.
  
@@ -122,59 +127,118 @@ print(date())
 
 
 
-```{r kddmodels, tidy=FALSE}
+```{r kddmodels1, tidy=FALSE}
 print(date())
 print(selvars)
+
+# look for novel levels in test
+hasNoNovelLevels <- logical(nrow(treatedTest))
+hasNoNovelLevels <- TRUE
+for(v in vars) {
+  if(is.factor(treatedTrainM[[v]])) {
+     hasNoNovelLevels <- hasNoNovelLevels & (treatedTest[[v]] %in% unique(treatedTrainM[[v]]))
+  }
+}
+print(summary(hasNoNovelLevels))
 
 # prepare plotting frames
 treatedTrainP = treatedTrainM[, yName, drop=FALSE]
 treatedTestP = treatedTest[, yName, drop=FALSE]
 
-
 formulaS = paste(yName,paste(selvars,collapse=' + '),sep=' ~ ')
-print("*****************************")
-print(date())
-mname <- 'glmPred'  # gbm crashes with: Error in object$var.levels[[i]] : subscript out of bounds
-print(paste(mname,length(selvars)))
-modelglms = glm(as.formula(formulaS),
+```
+
+Try gbm modeling.
+
+```{r kddmodel1e, error=TRUE}
+# errors out, presumably during its own cross val!
+modelGBMs = gbm(as.formula(formulaS),
                 data=treatedTrainM,
-                family=binomial(link='logit')
-)
-#print(summary(modelglms))
-treatedTrainP[[mname]] = predict(modelglms,newdata=treatedTrainM,type='response')
+                distribution='bernoulli',
+                n.trees=1000,
+                interaction.depth=3,
+                keep.data=FALSE,
+                cv.folds=5)
+```
 
-# can only score test rows, that don't expose novel levels (something been trying hard to avoid)
-good <- logical(nrow(treatedTest))
-good <- TRUE
-for(v in vars) {
-  if(is.factor(treatedTrainM[[v]])) {
-     good <- good & (treatedTest[[v]] %in% unique(treatedTrainM[[v]]))
-  }
-}
-print(summary(good))
-treatedTestP[[mname]] <- NA
-treatedTestP[[mname]][good] = predict(modelglms,
-                                      newdata=treatedTest[good,,drop=FALSE],
-                                      type='response')
-treatedTestP[[mname]][is.na(treatedTestP[[mname]])] <- mean(treatedTrainP[[yName]])
 
-t1 = paste(mname,'trainingM data')
+
+```{r kddmodels2,tidy=FALSE}
+# try again without cross val, giving up features to get a run.
+mname = 'gbmPred'
+modelGBMs = gbm(as.formula(formulaS),
+                data=treatedTrainM,
+                distribution='bernoulli',
+                n.trees=1000,
+                interaction.depth=3,
+                keep.data=FALSE)
+#print(modelGBMs)
+#print(summary(modelGBMs))
+nTrees = gbm.perf(modelGBMs)
+treatedTrainP[[mname]] = predict(modelGBMs,
+                                 newdata=treatedTrainM,type='response',
+                                 n.trees=nTrees)
+
+
+t1 = paste(mname,'train data')
 print(DoubleDensityPlot(treatedTrainP, mname, yName, 
                         title=t1))
 print(ROCPlot(treatedTrainP, mname, yName, 
               title=t1))
-```
-
-Now plot on test.  We are seeing over-fitting (even with a glm) due
-to the large number of variables.  
-
-```{r plot test}
 t2 = paste(mname,'test data')
+treatedTestP[[mname]] = predict(modelGBMs,
+                                    newdata=treatedTest,type='response',
+                                    n.trees=nTrees)
 print(DoubleDensityPlot(treatedTestP, mname, yName, 
                         title=t2))
 print(ROCPlot(treatedTestP, mname, yName, 
               title=t2))
 print(date())
+```
+
+Try elastic net glm modeling.  No formula intervace, so we have to call model matrix ourselves.
+We go to the trouble of binding the data together to gaurantee a joint encoding (deals
+with both issues of novel levels and missing levels which arise when the set of levels
+seen in training and test are not the same).
+
+```{r} 
+nTrain <- nrow(treatedTrainM)
+jointData <- rbind(treatedTrainM[,selvars,drop=FALSE],treatedTest[,selvars,drop=FALSE])
+jointData <- model.matrix(as.formula(paste('',paste(selvars,collapse=' + '),sep=' ~ ')),
+                                        jointData)
+# get rid of intercept
+jointData <- jointData[,-1]
+mvars <- colnames(jointData)
+# put back in frames
+treatedTrainJ <- jointData[seq_len(nTrain),]
+treatedTestJ <- jointData[-seq_len(nTrain),]
+```
+
+
+
+```{r}
+mname = 'glmPred'
+modelglms = cv.glmnet(x = treatedTrainJ,
+                      y = treatedTrainM[[yName]],
+                      alpha=0.5,
+                      family='binomial')
+#print(summary(modelglms))
+treatedTrainP[[mname]] = as.numeric(predict(modelglms,
+                                            newx=treatedTrainJ,
+                                            type='response'))
+treatedTestP[[mname]] = as.numeric(predict(modelglms,
+                                           newx=treatedTestJ,
+                                           type='response'))
+t1 = paste(mname,'train data')
+print(DoubleDensityPlot(treatedTrainP, mname, yName, 
+                        title=t1))
+print(ROCPlot(treatedTrainP, mname, yName, 
+              title=t1))
+t2 = paste(mname,'test data')
+print(DoubleDensityPlot(treatedTestP, mname, yName, 
+                        title=t2))
+print(ROCPlot(treatedTestP, mname, yName, 
+              title=t2))
 ```
 
 Practical Data Science with R's
