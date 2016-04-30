@@ -103,7 +103,7 @@ dotplot_identity(scoreFrame, "varName", "sig", "vartype") +
   scale_color_manual(values = c("noise" = "#d95f02", "signal" = "#1b9e77")) 
 ```
 
-Note that the noise variables have large significance values, denoting statistical insignificance.  `vtreat` uses a simulated "out of sample" estimate of signficance which is pessimal on noise variables.
+Note that the noise variables typically have large significance values, denoting statistical insignificance.  Usually we [recommend doing some pruning on variables before moving on](http://www.win-vector.com/blog/2014/02/bad-bayes-an-example-of-why-you-need-hold-out-testing/), but for this example we will attempt dimensionality reduction before pruning.
 
 ## *Y*-Aware PCA
 
