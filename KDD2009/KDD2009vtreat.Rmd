@@ -64,8 +64,6 @@ if(!debug) {
 }
 
 # build treatments 
-kddSig = 0.05
-
 trainPlan = mkCrossFrameCExperiment(dTrain,
     vars,yName,yTarget,
     smFactor=2.0, 
@@ -73,6 +71,8 @@ trainPlan = mkCrossFrameCExperiment(dTrain,
 treatmentsC = trainPlan$treatments
 treatedTrainM = trainPlan$crossFrame
 
+kddSig = 1/nrow(treatmentsC$scoreFrame)
+print(kddSig)
 selvars = treatmentsC$scoreFrame$varName[treatmentsC$scoreFrame$sig<kddSig]
 treatedTrainM[[yName]] = treatedTrainM[[yName]]==yTarget
 
