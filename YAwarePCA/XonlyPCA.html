@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+
+<meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="pandoc" />
+
+
+<meta name="author" content="Nina Zumel, Win-Vector LLC" />
+
+
+<title>Principal Components Regression, Pt.1: The Standard Method</title>
+
+<script src="XonlyPCA_files/jquery-1.11.3/jquery.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="XonlyPCA_files/bootstrap-3.3.5/css/bootstrap.min.css" rel="stylesheet" />
+<script src="XonlyPCA_files/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="XonlyPCA_files/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="XonlyPCA_files/bootstrap-3.3.5/shim/respond.min.js"></script>
+
+<style type="text/css">code{white-space: pre;}</style>
+<link rel="stylesheet"
+      href="XonlyPCA_files/highlight/default.css"
+      type="text/css" />
+<script src="XonlyPCA_files/highlight/highlight.js"></script>
+<style type="text/css">
+  pre:not([class]) {
+    background-color: white;
+  }
+</style>
+<script type="text/javascript">
+if (window.hljs && document.readyState && document.readyState === "complete") {
+   window.setTimeout(function() {
+      hljs.initHighlighting();
+   }, 0);
+}
+</script>
+
+
+
+<style type="text/css">
+h1 {
+  font-size: 34px;
+}
+h1.title {
+  font-size: 38px;
+}
+h2 {
+  font-size: 30px;
+}
+h3 {
+  font-size: 24px;
+}
+h4 {
+  font-size: 18px;
+}
+h5 {
+  font-size: 16px;
+}
+h6 {
+  font-size: 12px;
+}
+.table th:not([align]) {
+  text-align: left;
+}
+</style>
+
+
+</head>
+
+<body>
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+code {
+  color: inherit;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+img {
+  max-width:100%;
+  height: auto;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+</style>
+
+
+<div class="container-fluid main-container">
+
+<!-- tabsets -->
+<script src="XonlyPCA_files/navigation-1.0/tabsets.js"></script>
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+</script>
+
+<!-- code folding -->
+
+
+
+
+
+
+<div class="fluid-row" id="header">
+
+
+
+<h1 class="title toc-ignore">Principal Components Regression, Pt.1: The Standard Method</h1>
+<h4 class="author"><em>Nina Zumel, Win-Vector LLC</em></h4>
+<h4 class="date"><em>May 7, 2016</em></h4>
+
+</div>
+
+
+<p>This article is from <a href="http://www.win-vector.com/blog/2016/05/pcr_part1_xonly" class="uri">http://www.win-vector.com/blog/2016/05/pcr_part1_xonly</a>.</p>
+<p>In this note, we discuss principal components regression and some of the issues with it:</p>
+<ul>
+<li>The need for scaling.</li>
+<li>The need for pruning.</li>
+<li>The lack of &quot;<em>y</em>-awareness&quot; of the standard dimensionality reduction step.</li>
+</ul>
+<p>The purpose of this article is to set the stage for presenting dimensionality reduction techniques more appropriate for predictive modeling, such as <em>y</em>-aware principal components analysis, variable pruning, L2-regularized regression, supervised PCR, or partial least squares. We do this by working detailed examples and building the relevant graphs. In our follow-up article we describe and demonstrate the idea of <em>y</em>-aware scaling.</p>
+<p>Note we will try to say &quot;principal components&quot; (plural) throughout, following Everitt's <em>The Cambridge Dictionary of Statistics</em>, though this is not the only common spelling (e.g. Wikipedia: <a href="https://en.wikipedia.org/wiki/Principal_component_regression">Principal component regression</a>). We will work all of our examples in <a href="https://cran.r-project.org/">R</a>.</p>
+<div id="principal-components-regression" class="section level2">
+<h2>Principal Components Regression</h2>
+<p>In principal components regression (PCR), we use principal components analysis (PCA) to decompose the independent (<em>x</em>) variables into an orthogonal basis (the principal components), and select a subset of those components as the variables to predict <em>y</em>. PCR and PCA are useful techniques for dimensionality reduction when modeling, and are especially useful when the independent variables are highly colinear.</p>
+<p>Generally, one selects the principal components with the highest variance -- that is, the components with the largest singular values -- because the subspace defined by these principal components captures most of the variation in the data, and thus represents a smaller space that we believe captures most of the qualities of the data. Note, however, that standard PCA is an &quot;<em>x</em>-only&quot; decomposition, and as Jolliffe (1982) shows through examples from the literature, sometimes lower-variance components can be critical for predicting <em>y</em>, and conversely, high variance components are sometimes not important.</p>
+<blockquote>
+<p>Mosteller and Tukey (1977, pp. 397-398) argue similarly that the components with small variance are unlikely to be important in regression, apparently on the basis that nature is &quot;tricky, but not downright mean&quot;. We shall see in the examples below that without too much effort we can find examples where nature is &quot;downright mean&quot;. -- Jolliffe (1982)</p>
+</blockquote>
+<p>The remainder of this note presents principal components analysis in the context of PCR and predictive modeling in general. We will show some of the issues in using an <em>x</em>-only technique like PCA for dimensionality reduction. In a follow-up note, we'll discuss some <em>y</em>-aware approaches that address these issues.</p>
+<p>First, let's build our example. In this sort of teaching we insist on toy or synthetic problems so we actually <em>know</em> the right answer, and can therefore tell which procedures are better at modeling the truth.</p>
+<p>In this data set, there are two (unobservable) processes: one that produces the output <code>yA</code> and one that produces the output <code>yB</code>. We only observe the mixture of the two: <code>y =  yA + yB + eps</code>, where <code>eps</code> is a noise term. Think of <code>y</code> as measuring some notion of success and the <code>x</code> variables as noisy estimates of two different factors that can each drive success. We'll set things up so that the first five variables (x.01, x.02, x.03, x.04, x.05) have all the signal. The odd numbered variables correspond to one process (<code>yB</code>) and the even numbered variables correspond to the other (<code>yA</code>).</p>
+<p>Then, to simulate the difficulties of real world modeling, we'll add lots of pure noise variables (<code>noise*</code>). The noise variables are unrelated to our <em>y</em> of interest -- but are related to other &quot;y-style&quot; processes that we are not interested in. As is common with good statistical counterexamples, the example looks like something that should not happen or that can be easily avoided. Our point is that the data analyst is usually working with data just like this.</p>
+<p>Data tends to come from databases that must support many different tasks, so it is exactly the case that there may be columns or variables that are correlated to unknown and unwanted additional processes. The reason PCA can't filter out these noise variables is that without use of <em>y</em>, standard PCA has no way of knowing <em>what</em> portion of the variation in each variable is important to the problem at hand and should be preserved. This <em>can</em> be fixed through domain knowledge (knowing which variables to use), variable pruning and <em>y</em>-aware scaling. Our next article will discuss these procedures; in this article we will orient ourselves with a demonstration of both what a good analysis and what a bad analysis looks like.</p>
+<p>All the variables are also deliberately mis-scaled to model some of the difficulties of working with under-curated real world data.</p>
+<pre class="r"><code># build example where even and odd variables are bringing in noisy images
+# of two different signals.
+mkData &lt;- function(n) {
+  for(group in 1:10) {
+    # y is the sum of two effects yA and yB
+    yA &lt;- rnorm(n)
+    yB &lt;- rnorm(n)
+    if(group==1) {
+      d &lt;- data.frame(y=yA+yB+rnorm(n))
+      code &lt;- &#39;x&#39;
+    } else {
+      code &lt;- paste0(&#39;noise&#39;,group-1)
+    }
+    yS &lt;- list(yA,yB)
+    # these variables are correlated with y in group 1,
+    # but only to each other (and not y) in other groups
+    for(i in 1:5) {
+      vi &lt;- yS[[1+(i%%2)]] + rnorm(nrow(d))
+      d[[paste(code,formatC(i,width=2,flag=0),sep=&#39;.&#39;)]] &lt;- ncol(d)*vi
+    }
+  }
+  d
+}</code></pre>
+<p>Notice the copy of <em>y</em> in the data frame has additional &quot;unexplainable variance&quot; so only about 66% of the variation in <em>y</em> is predictable.</p>
+<p>Let's start with our train and test data.</p>
+<pre class="r"><code># make data
+set.seed(23525)
+dTrain &lt;- mkData(1000)
+dTest &lt;- mkData(1000)</code></pre>
+<p>Let's look at our outcome <em>y</em> and a few of our variables.</p>
+<pre class="r"><code>summary(dTrain[, c(&quot;y&quot;, &quot;x.01&quot;, &quot;x.02&quot;,
+                   &quot;noise1.01&quot;, &quot;noise1.02&quot;)])</code></pre>
+<pre><code>##        y                 x.01               x.02        
+##  Min.   :-5.08978   Min.   :-4.94531   Min.   :-9.9796  
+##  1st Qu.:-1.01488   1st Qu.:-0.97409   1st Qu.:-1.8235  
+##  Median : 0.08223   Median : 0.04962   Median : 0.2025  
+##  Mean   : 0.08504   Mean   : 0.02968   Mean   : 0.1406  
+##  3rd Qu.: 1.17766   3rd Qu.: 0.93307   3rd Qu.: 1.9949  
+##  Max.   : 5.84932   Max.   : 4.25777   Max.   :10.0261  
+##    noise1.01          noise1.02       
+##  Min.   :-30.5661   Min.   :-30.4412  
+##  1st Qu.: -5.6814   1st Qu.: -6.4069  
+##  Median :  0.5278   Median :  0.3031  
+##  Mean   :  0.1754   Mean   :  0.4145  
+##  3rd Qu.:  5.9238   3rd Qu.:  6.8142  
+##  Max.   : 26.4111   Max.   : 31.8405</code></pre>
+<p>Usually we recommend doing some significance pruning on variables before moving on -- see <a href="http://www.win-vector.com/blog/2014/02/bad-bayes-an-example-of-why-you-need-hold-out-testing/">here</a> for possible consequences of not pruning an over-abundance of variables, and <a href="http://www.win-vector.com/blog/2015/08/how-do-you-know-if-your-data-has-signal/">here</a> for a discussion of one way to prune, based on significance. For this example, however, we will deliberately attempt dimensionality reduction without pruning (to demonstrate the problem). Part of what we are trying to show is to <em>not</em> assume PCA performs these steps for you.</p>
+</div>
+<div id="ideal-situation" class="section level2">
+<h2>Ideal situation</h2>
+<p>First, let's look at the ideal situation. If we had sufficient domain knowledge (or had performed significance pruning) to remove the noise, we would have no pure noise variables. In our example we know which variables carry signal and therefore can limit down to them before doing the PCA as follows.</p>
+<pre class="r"><code>goodVars &lt;-  colnames(dTrain)[grep(&#39;^x.&#39;,colnames(dTrain))]
+dTrainIdeal &lt;- dTrain[,c(&#39;y&#39;,goodVars)]
+dTestIdeal &lt;-  dTrain[,c(&#39;y&#39;,goodVars)]</code></pre>
+<p>Let's perform the analysis and look at the magnitude of the singular values.</p>
+<pre class="r"><code># do the PCA
+dmTrainIdeal &lt;- as.matrix(dTrainIdeal[,goodVars])
+princIdeal &lt;- prcomp(dmTrainIdeal,center = TRUE,scale. = TRUE)
+
+# extract the principal components
+rot5Ideal &lt;- extractProjection(5,princIdeal)
+
+# prepare the data to plot the variable loadings
+rotfIdeal = as.data.frame(rot5Ideal)
+rotfIdeal$varName = rownames(rotfIdeal)
+rotflongIdeal = gather(rotfIdeal, &quot;PC&quot;, &quot;loading&quot;,
+                       starts_with(&quot;PC&quot;))
+rotflongIdeal$vartype = ifelse(grepl(&quot;noise&quot;, 
+                                     rotflongIdeal$varName),
+                               &quot;noise&quot;, &quot;signal&quot;)
+
+# plot the singular values
+dotplot_identity(frame = data.frame(pc=1:length(princIdeal$sdev), 
+                            magnitude=princIdeal$sdev), 
+                 xvar=&quot;pc&quot;,yvar=&quot;magnitude&quot;) +
+  ggtitle(&quot;Ideal case: Magnitudes of singular values&quot;)</code></pre>
+<p><img src="XonlyPCA_files/figure-html/idealsv-1.png" width="672" /></p>
+<p>The magnitudes of the singular values tell us that the first two principal components carry most of the signal. We can also look at the variable loadings of the principal components. The plot of the variable loadings is a graphical representation of the coordinates of the principal components. Each coordinate corresponds to the contribution of one of the original variables to that principal component.</p>
+<pre class="r"><code>dotplot_identity(rotflongIdeal, &quot;varName&quot;, &quot;loading&quot;, &quot;vartype&quot;) + 
+  facet_wrap(~PC,nrow=1) + coord_flip() + 
+  ggtitle(&quot;x scaled variable loadings, first 5 principal components&quot;) + 
+  scale_color_manual(values = c(&quot;noise&quot; = &quot;#d95f02&quot;, &quot;signal&quot; = &quot;#1b9e77&quot;))</code></pre>
+<p><img src="XonlyPCA_files/figure-html/idealsvld-1.png" width="672" /></p>
+<p>We see that we recover the even/odd loadings of the original signal variables. <code>PC1</code> has the odd variables, and <code>PC2</code> has the even variables. The next three principal components complete the basis for the five original variables.</p>
+<p>Since most of the signal is in the first two principal components, we can look at the projection of the data into that plane, using color to code <em>y</em>.</p>
+<pre class="r"><code># signs are arbitrary on PCA, so instead of calling predict we pull out
+# (and alter) the projection by hand
+projectedTrainIdeal &lt;-
+  as.data.frame(dmTrainIdeal %*% extractProjection(2,princIdeal),
+                                 stringsAsFactors = FALSE)
+projectedTrainIdeal$y &lt;- dTrain$y
+ScatterHistN(projectedTrainIdeal,&#39;PC1&#39;,&#39;PC2&#39;,&#39;y&#39;,
+               &quot;Ideal Data projected to first two principal components&quot;)</code></pre>
+<p><img src="XonlyPCA_files/figure-html/idealproj-1.png" width="672" /></p>
+<p>Notice that the value of <em>y</em> increases both as we move up and as we move right. We have recovered two orthogonal features that each correlate with an increase in y (in general the signs of the principal components -- that is, which direction is &quot;positive&quot; -- are arbitrary, so without precautions the above graph can appear flipped). Recall that we constructed the data so that the odd variables (represented by <code>PC1</code>) correspond to process <em>yB</em> and the even variables (represented by <code>PC2</code>) correspond to process <em>yA</em>. We have recovered both of these relations in the figure.</p>
+<p>This is why you rely on domain knowledge, or barring that, at least prune your variables. For this example variable pruning would have gotten us to the above ideal case. In our next article we will show how to perform the significance pruning.</p>
+</div>
+<div id="x-only-pca" class="section level2">
+<h2><em>X</em>-only PCA</h2>
+<p>To demonstrate the problem of <em>x</em>-only PCA on unpruned data in a predictive modeling situation, let's analyze the same data without limiting ourselves to the known good variables. We are pretending (as is often the case) we don't have the domain knowledge indicating which variables are useful <em>and</em> we have neglected to significance prune the variables before PCA. In our experience, this is a common mistake in using PCR, or, more generally, with using PCA in predictive modeling situations.</p>
+<p>This example will demonstrate how you lose modeling power when you don't apply the methods in a manner appropriate to your problem. Note that the appropriate method for your data may not match the doctrine of another field, as they may have different data issues.</p>
+<div id="the-wrong-way-pca-without-any-scaling" class="section level3">
+<h3>The wrong way: PCA without any scaling</h3>
+<p>We deliberately mis-scaled the original data when we generated it. Mis-scaled data is a common problem in data science situations, but perhaps less common in carefully curated scientific situations. In a messy data situation like the one we are emulating, the best practice is to re-scale the <em>x</em> variables; however, we'll first naively apply PCA to the data as it is. This is to demonstrate the sensitivity of PCA to the units of the data.</p>
+<pre class="r"><code>vars &lt;- setdiff(colnames(dTrain),&#39;y&#39;)
+
+duTrain &lt;- as.matrix(dTrain[,vars])
+prinU &lt;- prcomp(duTrain,center = TRUE,scale. = FALSE) 
+
+dotplot_identity(frame = data.frame(pc=1:length(prinU$sdev), 
+                            magnitude=prinU$sdev), 
+                 xvar=&quot;pc&quot;,yvar=&quot;magnitude&quot;) +
+  ggtitle(&quot;Unscaled case: Magnitudes of singular values&quot;)</code></pre>
+<p><img src="XonlyPCA_files/figure-html/noscale-1.png" width="672" /></p>
+<p>There is no obvious knee in the magnitudes of the singular values, so we are at a loss as to how many variables we should use. In addition, when we look at the variable loading of the first five principal components, we will see another problem:</p>
+<pre class="r"><code>rot5U &lt;- extractProjection(5,prinU)
+rot5U = as.data.frame(rot5U)
+rot5U$varName = rownames(rot5U)
+rot5U = gather(rot5U, &quot;PC&quot;, &quot;loading&quot;,
+                       starts_with(&quot;PC&quot;))
+rot5U$vartype = ifelse(grepl(&quot;noise&quot;, 
+                                     rot5U$varName),
+                               &quot;noise&quot;, &quot;signal&quot;)
+
+dotplot_identity(rot5U, &quot;varName&quot;, &quot;loading&quot;, &quot;vartype&quot;) + 
+  facet_wrap(~PC,nrow=1) + coord_flip() + 
+  ggtitle(&quot;unscaled variable loadings, first 5 principal components&quot;) + 
+  scale_color_manual(values = c(&quot;noise&quot; = &quot;#d95f02&quot;, &quot;signal&quot; = &quot;#1b9e77&quot;))</code></pre>
+<p><img src="XonlyPCA_files/figure-html/noscaleloading-1.png" width="672" /></p>
+<p>The noise variables completely dominate the loading of the first several principal components. Because of the way we deliberately mis-scaled the data, the noise variables are of much larger magnitude than the signal variables, and so the true signal is masked when we decompose the data.</p>
+<p>Since the magnitudes of the singular values don't really give us a clue as to how many components to use in our model, let's try using all of them. This actually makes no sense, because using all the principal components is equivalent to using all the variables, thus defeating the whole purpose of doing PCA in the first place. But let's do it anyway (as many unwittingly do).</p>
+<pre class="r"><code># get all the principal components
+# not really a projection as we took all components!
+projectedTrain &lt;- as.data.frame(predict(prinU,duTrain),
+                                 stringsAsFactors = FALSE)
+vars = colnames(projectedTrain)
+projectedTrain$y &lt;- dTrain$y
+
+varexpr = paste(vars, collapse=&quot;+&quot;)
+fmla = paste(&quot;y ~&quot;, varexpr)
+
+model &lt;- lm(fmla,data=projectedTrain)
+summary(model)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = fmla, data = projectedTrain)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -3.1748 -0.7611  0.0111  0.7821  3.6559 
+## 
+## Coefficients:
+##               Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)  8.504e-02  3.894e-02   2.184 0.029204 *  
+## PC1          1.492e-04  4.131e-04   0.361 0.717983    
+## PC2          1.465e-05  4.458e-04   0.033 0.973793    
+## PC3         -7.372e-04  4.681e-04  -1.575 0.115648    
+## PC4          6.894e-04  5.211e-04   1.323 0.186171    
+## PC5          7.529e-04  5.387e-04   1.398 0.162577    
+## PC6         -2.382e-04  5.961e-04  -0.400 0.689612    
+## PC7          2.555e-04  6.142e-04   0.416 0.677546    
+## PC8          5.850e-04  6.701e-04   0.873 0.382908    
+## PC9         -6.890e-04  6.955e-04  -0.991 0.322102    
+## PC10         7.472e-04  7.650e-04   0.977 0.328993    
+## PC11        -7.034e-04  7.839e-04  -0.897 0.369763    
+## PC12         7.062e-04  8.039e-04   0.878 0.379900    
+## PC13         1.098e-04  8.125e-04   0.135 0.892511    
+## PC14        -8.137e-04  8.405e-04  -0.968 0.333213    
+## PC15        -5.163e-05  8.716e-04  -0.059 0.952776    
+## PC16         1.945e-03  9.015e-04   2.158 0.031193 *  
+## PC17        -3.384e-04  9.548e-04  -0.354 0.723143    
+## PC18        -9.339e-04  9.774e-04  -0.955 0.339587    
+## PC19        -6.110e-04  1.005e-03  -0.608 0.543413    
+## PC20         8.747e-04  1.042e-03   0.839 0.401494    
+## PC21         4.538e-04  1.083e-03   0.419 0.675310    
+## PC22         4.237e-04  1.086e-03   0.390 0.696428    
+## PC23        -2.011e-03  1.187e-03  -1.694 0.090590 .  
+## PC24         3.451e-04  1.204e-03   0.287 0.774416    
+## PC25         2.156e-03  1.263e-03   1.707 0.088183 .  
+## PC26        -6.293e-04  1.314e-03  -0.479 0.631988    
+## PC27         8.401e-04  1.364e-03   0.616 0.538153    
+## PC28        -2.578e-03  1.374e-03  -1.876 0.061014 .  
+## PC29         4.354e-04  1.423e-03   0.306 0.759691    
+## PC30         4.098e-04  1.520e-03   0.270 0.787554    
+## PC31         5.509e-03  1.650e-03   3.339 0.000875 ***
+## PC32         9.097e-04  1.750e-03   0.520 0.603227    
+## PC33         5.617e-04  1.792e-03   0.314 0.753964    
+## PC34        -1.247e-04  1.870e-03  -0.067 0.946837    
+## PC35        -6.470e-04  2.055e-03  -0.315 0.752951    
+## PC36         1.435e-03  2.218e-03   0.647 0.517887    
+## PC37         4.906e-04  2.246e-03   0.218 0.827168    
+## PC38        -2.915e-03  2.350e-03  -1.240 0.215159    
+## PC39        -1.917e-03  2.799e-03  -0.685 0.493703    
+## PC40         4.827e-04  2.820e-03   0.171 0.864117    
+## PC41        -6.016e-05  3.060e-03  -0.020 0.984321    
+## PC42         6.750e-03  3.446e-03   1.959 0.050425 .  
+## PC43        -3.537e-03  4.365e-03  -0.810 0.417996    
+## PC44        -4.845e-03  5.108e-03  -0.948 0.343131    
+## PC45         8.643e-02  5.456e-03  15.842  &lt; 2e-16 ***
+## PC46         7.882e-02  6.267e-03  12.577  &lt; 2e-16 ***
+## PC47         1.202e-01  6.693e-03  17.965  &lt; 2e-16 ***
+## PC48        -9.042e-02  1.163e-02  -7.778 1.92e-14 ***
+## PC49         1.309e-01  1.670e-02   7.837 1.23e-14 ***
+## PC50         2.893e-01  3.546e-02   8.157 1.08e-15 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 1.231 on 949 degrees of freedom
+## Multiple R-squared:  0.5052, Adjusted R-squared:  0.4791 
+## F-statistic: 19.38 on 50 and 949 DF,  p-value: &lt; 2.2e-16</code></pre>
+<pre class="r"><code>estimate &lt;- predict(model,newdata=projectedTrain)
+trainrsq &lt;- rsq(estimate,projectedTrain$y)</code></pre>
+<p>Note that most of the variables that achieve significance are the very last ones! We will leave it to the reader to confirm that using even as many as the first 25 principal components -- half the variables -- explains little of the variation in <em>y</em>. If we wanted to use PCR to reduce the dimensionality of the problem, we have failed. This is an example of what Jolliffe would have called a &quot;downright mean&quot; modeling problem, which we caused by mis-scaling the data. Note the r-squared of 0.5052 for comparison, later.</p>
+<p>So now let's do what we should have done in the first place: scale the data.</p>
+</div>
+<div id="a-better-way-preparing-the-training-data-with-x-only-scaling" class="section level3">
+<h3>A better way: Preparing the training data with <em>x</em>-only scaling</h3>
+<p>Standard practice is to center the data at mean zero and scale it to unit standard deviation, which is easy with the <code>scale</code> command.</p>
+<pre class="r"><code>dTrainNTreatedUnscaled &lt;- dTrain
+dTestNTreatedUnscaled &lt;- dTest
+
+# scale the data
+dTrainNTreatedXscaled &lt;- 
+  as.data.frame(scale(dTrainNTreatedUnscaled[,colnames(dTrainNTreatedUnscaled)!=&#39;y&#39;],
+                      center=TRUE,scale=TRUE),stringsAsFactors = FALSE)
+dTrainNTreatedXscaled$y &lt;- dTrainNTreatedUnscaled$y
+dTestNTreatedXscaled &lt;- 
+  as.data.frame(scale(dTestNTreatedUnscaled[,colnames(dTestNTreatedUnscaled)!=&#39;y&#39;],
+                      center=TRUE,scale=TRUE),stringsAsFactors = FALSE)
+dTestNTreatedXscaled$y &lt;- dTestNTreatedUnscaled$y
+
+# get the variable ranges
+ranges = vapply(dTrainNTreatedXscaled, FUN=function(col) c(min(col), max(col)), numeric(2))
+rownames(ranges) = c(&quot;vmin&quot;, &quot;vmax&quot;) 
+rframe = as.data.frame(t(ranges))  # make ymin/ymax the columns
+rframe$varName = rownames(rframe)
+varnames = setdiff(rownames(rframe), &quot;y&quot;)
+rframe = rframe[varnames,]
+rframe$vartype = ifelse(grepl(&quot;noise&quot;, rframe$varName),
+                        &quot;noise&quot;, &quot;signal&quot;)
+
+summary(dTrainNTreatedXscaled[, c(&quot;y&quot;, &quot;x.01&quot;, &quot;x.02&quot;, 
+                                  &quot;noise1.01&quot;, &quot;noise1.02&quot;)])</code></pre>
+<pre><code>##        y                 x.01               x.02         
+##  Min.   :-5.08978   Min.   :-3.56466   Min.   :-3.53178  
+##  1st Qu.:-1.01488   1st Qu.:-0.71922   1st Qu.:-0.68546  
+##  Median : 0.08223   Median : 0.01428   Median : 0.02157  
+##  Mean   : 0.08504   Mean   : 0.00000   Mean   : 0.00000  
+##  3rd Qu.: 1.17766   3rd Qu.: 0.64729   3rd Qu.: 0.64710  
+##  Max.   : 5.84932   Max.   : 3.02949   Max.   : 3.44983  
+##    noise1.01          noise1.02       
+##  Min.   :-3.55505   Min.   :-3.04344  
+##  1st Qu.:-0.67730   1st Qu.:-0.67283  
+##  Median : 0.04075   Median :-0.01098  
+##  Mean   : 0.00000   Mean   : 0.00000  
+##  3rd Qu.: 0.66476   3rd Qu.: 0.63123  
+##  Max.   : 3.03398   Max.   : 3.09969</code></pre>
+<pre class="r"><code>barbell_plot(rframe, &quot;varName&quot;, &quot;vmin&quot;, &quot;vmax&quot;, &quot;vartype&quot;) +
+  coord_flip() + ggtitle(&quot;x scaled variables: ranges&quot;) + 
+  scale_color_manual(values = c(&quot;noise&quot; = &quot;#d95f02&quot;, &quot;signal&quot; = &quot;#1b9e77&quot;))</code></pre>
+<p><img src="XonlyPCA_files/figure-html/xonlyexample-1.png" width="672" /></p>
+<p>Note that the signal and noise variables now have commensurate ranges.</p>
+</div>
+<div id="the-principal-components-analysis" class="section level3">
+<h3>The principal components analysis</h3>
+<pre class="r"><code>vars = setdiff(colnames(dTrainNTreatedXscaled), &quot;y&quot;)
+
+dmTrain &lt;- as.matrix(dTrainNTreatedXscaled[,vars])
+dmTest &lt;- as.matrix(dTestNTreatedXscaled[,vars])
+princ &lt;- prcomp(dmTrain,center = TRUE,scale. = TRUE) 
+dotplot_identity(frame = data.frame(pc=1:length(princ$sdev), 
+                            magnitude=princ$sdev), 
+                 xvar=&quot;pc&quot;,yvar=&quot;magnitude&quot;) +
+  ggtitle(&quot;x scaled variables: Magnitudes of singular values&quot;)</code></pre>
+<p><img src="XonlyPCA_files/figure-html/xscaledPCA-1.png" width="672" /></p>
+<pre class="r"><code>sum(princ$sdev^2)</code></pre>
+<pre><code>## [1] 50</code></pre>
+<p>Now the magnitudes of the singular values suggest that we can try to model the data with only the first twenty principal components. But first, let's look at the variable loadings of the first five principal components.</p>
+<pre class="r"><code>rot5 &lt;- extractProjection(5,princ)
+rotf = as.data.frame(rot5)
+rotf$varName = rownames(rotf)
+rotflong = gather(rotf, &quot;PC&quot;, &quot;loading&quot;, starts_with(&quot;PC&quot;))
+rotflong$vartype = ifelse(grepl(&quot;noise&quot;, rotflong$varName), 
+                          &quot;noise&quot;, &quot;signal&quot;)
+
+dotplot_identity(rotflong, &quot;varName&quot;, &quot;loading&quot;, &quot;vartype&quot;) + 
+  facet_wrap(~PC,nrow=1) + coord_flip() + 
+  ggtitle(&quot;x scaled variable loadings, first 5 principal components&quot;) + 
+  scale_color_manual(values = c(&quot;noise&quot; = &quot;#d95f02&quot;, &quot;signal&quot; = &quot;#1b9e77&quot;))</code></pre>
+<p><img src="XonlyPCA_files/figure-html/xscaledload-1.png" width="672" /></p>
+<p>The signal variables now have larger loadings than they did in the unscaled case, but the noise variables still dominate the projection, in aggregate swamping out the contributions from the signal variables. The two processes that produced <em>y</em> have diffused amongst the principal components, rather than mostly concentrating in the first two, as they did in the ideal case. This is because we constructed the noise variables to have variation and some correlations with each other -- but not be correlated with <em>y</em>. PCA doesn't know that we are interested only in variable correlations that are due to <em>y</em>, so it must decompose the data to capture as much variation, and as many variable correlations, as possible.</p>
+<p>In other words, PCA must represent all processes present in the data, regardless of whether we are trying to predict those particular processes or not. Without the knowledge of the <em>y</em> that we are trying to predict, PCA is forced to prepare for <em>any</em> possible future prediction task.</p>
+<div id="modeling" class="section level4">
+<h4>Modeling</h4>
+<p>Let's build a model using only the first twenty principal components, as our above analysis suggests we should.</p>
+<pre class="r"><code># get all the principal components
+# not really a projection as we took all components!
+projectedTrain &lt;- as.data.frame(predict(princ,dmTrain),
+                                 stringsAsFactors = FALSE)
+projectedTrain$y &lt;- dTrainNTreatedXscaled$y
+
+ncomp = 20
+# here we will only model with the first ncomp principal components
+varexpr = paste(paste(&quot;PC&quot;, 1:ncomp, sep=&#39;&#39;), collapse=&#39;+&#39;)
+fmla = paste(&quot;y ~&quot;, varexpr)
+
+model &lt;- lm(fmla,data=projectedTrain)
+summary(model)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = fmla, data = projectedTrain)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -3.2612 -0.7939 -0.0096  0.7898  3.8352 
+## 
+## Coefficients:
+##              Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)  0.085043   0.039391   2.159 0.031097 *  
+## PC1          0.107016   0.025869   4.137 3.82e-05 ***
+## PC2         -0.047934   0.026198  -1.830 0.067597 .  
+## PC3          0.135933   0.026534   5.123 3.62e-07 ***
+## PC4         -0.162336   0.026761  -6.066 1.87e-09 ***
+## PC5          0.356880   0.027381  13.034  &lt; 2e-16 ***
+## PC6         -0.126491   0.027534  -4.594 4.92e-06 ***
+## PC7          0.092546   0.028093   3.294 0.001022 ** 
+## PC8         -0.134252   0.028619  -4.691 3.11e-06 ***
+## PC9          0.280126   0.028956   9.674  &lt; 2e-16 ***
+## PC10        -0.112623   0.029174  -3.860 0.000121 ***
+## PC11        -0.065812   0.030564  -2.153 0.031542 *  
+## PC12         0.339129   0.030989  10.943  &lt; 2e-16 ***
+## PC13        -0.006817   0.031727  -0.215 0.829918    
+## PC14         0.086316   0.032302   2.672 0.007661 ** 
+## PC15        -0.064822   0.032582  -1.989 0.046926 *  
+## PC16         0.300566   0.032739   9.181  &lt; 2e-16 ***
+## PC17        -0.339827   0.032979 -10.304  &lt; 2e-16 ***
+## PC18        -0.287752   0.033443  -8.604  &lt; 2e-16 ***
+## PC19         0.297290   0.034657   8.578  &lt; 2e-16 ***
+## PC20         0.084198   0.035265   2.388 0.017149 *  
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 1.246 on 979 degrees of freedom
+## Multiple R-squared:  0.4776, Adjusted R-squared:  0.467 
+## F-statistic: 44.76 on 20 and 979 DF,  p-value: &lt; 2.2e-16</code></pre>
+<pre class="r"><code>projectedTrain$estimate &lt;- predict(model,newdata=projectedTrain)
+ScatterHist(projectedTrain,&#39;estimate&#39;,&#39;y&#39;,&#39;Recovered 20 variable model versus truth (train)&#39;,
+            smoothmethod=&#39;identity&#39;,annot_size=3)</code></pre>
+<p><img src="XonlyPCA_files/figure-html/quant2-1.png" width="672" /></p>
+<pre class="r"><code>trainrsq &lt;- rsq(projectedTrain$estimate,projectedTrain$y)</code></pre>
+<p>This model explains 47.76% of the variation in the training set. We do about as well on test.</p>
+<pre class="r"><code>projectedTest &lt;- as.data.frame(predict(princ,dmTest),
+                                 stringsAsFactors = FALSE)
+projectedTest$y &lt;- dTestNTreatedXscaled$y
+projectedTest$estimate &lt;- predict(model,newdata=projectedTest)
+testrsq &lt;- rsq(projectedTest$estimate,projectedTest$y)
+testrsq</code></pre>
+<pre><code>## [1] 0.5033022</code></pre>
+<p>This is pretty good; recall that we had about 33% unexplainable variance in the data, so we would not expect any modeling algorithm to get better than an r-squared of about 0.67.</p>
+<p>We can confirm that this performance is as good as simply regressing on all the variables without the PCA, so we have at least not lost information via our dimensionality reduction.</p>
+<pre class="r"><code># fit a model to the original data
+vars &lt;- setdiff(colnames(dTrain),&#39;y&#39;)
+formulaB &lt;- paste(&#39;y&#39;,paste(vars,collapse=&#39; + &#39;),sep=&#39; ~ &#39;)
+modelB &lt;- lm(formulaB,data=dTrain)
+dTrainestimate &lt;- predict(modelB,newdata=dTrain)
+rsq(dTrainestimate,dTrain$y)</code></pre>
+<pre><code>## [1] 0.5052081</code></pre>
+<pre class="r"><code>dTestestimate &lt;- predict(modelB,newdata=dTest)
+rsq(dTestestimate,dTest$y)</code></pre>
+<pre><code>## [1] 0.4751995</code></pre>
+<p>We will show in our next article how to get a similar test r-squared from this data using a model with only two variables.</p>
+</div>
+</div>
+<div id="are-we-done" class="section level3">
+<h3>Are we done?</h3>
+<p>Scaling the variables improves the performance of PCR on this data relative to not scaling, but we haven't completely solved the problem (though some analysts are fooled into thinking thusly). We have not explicitly recovered the two processes that drive <em>y</em>, and recovering such structure in the data is one of the purposes of PCA -- if we did not care about the underlying structure of the problem, we could simply fit a model to the original data, or use other methods (like significance pruning) to reduce the problem dimensionality.</p>
+<p>It is a misconception in some fields that the variables must be orthogonal before fitting a linear regression model. This is <em>not</em> true. A linear model fit to collinear variables can still predict well; the only downside is that the coefficients of the model are not necessarily as easily interpretable as they are when the variables are orthogonal (and ideally, centered and scaled, as well). If your data has so much collinearity that the design matrix is ill-conditioned, causing the model coefficients to be inappropriately large or unstable, then regularization (ridge, lasso, or elastic-net regression) is a good solution. More complex predictive modeling approaches, for example random forest or gradient boosting, also tend to be more immune to collinearity.</p>
+<p>So if you are doing PCR, you presumably are interested in the underlying structure of the data, and in this case, we haven't found it. Projecting onto the first few principal components fails to show much of a relation between these components and <em>y</em>.</p>
+<p>We can confirm the first two <em>x</em>-scaled principal components are not informative with the following graph.</p>
+<pre class="r"><code>proj &lt;- extractProjection(2,princ)
+# apply projection
+projectedTrain &lt;- as.data.frame(dmTrain %*% proj,
+                      stringsAsFactors = FALSE)
+projectedTrain$y &lt;- dTrainNTreatedXscaled$y
+# plot data sorted by principal components
+ScatterHistN(projectedTrain,&#39;PC1&#39;,&#39;PC2&#39;,&#39;y&#39;,
+               &quot;x scaled Data projected to first two principal components&quot;)</code></pre>
+<p><img src="XonlyPCA_files/figure-html/xscaledplot-1.png" width="672" /></p>
+<p>We see that <em>y</em> is not well ordered by <code>PC1</code> and <code>PC2</code> here, as it was in the ideal case, and as it will be with the <em>y</em>-aware PCA.</p>
+<p>In our next article we will show that we can explain almost 50% of the <em>y</em> variance in this data using only two variables. This is quite good as even the &quot;all variable&quot; model only picks up about that much of the relation and <em>y</em> by design has about 33% unexplainable variation. In addition to showing the standard methods (including variable pruning) we will introduce a technique we call &quot;<em>y</em>-aware scaling.&quot;</p>
+<p>Part 2 (when released) will be found here <a href="http://www.win-vector.com/blog/2016/05/pcr_part2_yaware" class="uri">http://www.win-vector.com/blog/2016/05/pcr_part2_yaware</a>.</p>
+</div>
+<div id="references" class="section level3">
+<h3>References</h3>
+<p>Everitt, B. S. <em>The Cambridge Dictionary of Statistics</em>, 2nd edition, Cambridge University Press, 2005.</p>
+<p>Jolliffe, Ian T. &quot;A Note on the Use of Principal Components in Regression,&quot; <em>Journal of the Royal Statistical Society. Series C (Applied Statistics)</em>, Vol. 31, No. 3 (1982), pp. 300-303</p>
+</div>
+</div>
+
+
+
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+$(document).ready(function () {
+  $('tr.header').parent('thead').parent('table').addClass('table table-condensed');
+});
+
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
