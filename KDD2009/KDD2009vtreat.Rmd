@@ -5,6 +5,7 @@
 #load some libraries
 # http://www.win-vector.com/blog/2014/08/vtreat-designing-a-package-for-variable-treatment/
 library('vtreat')
+packageVersion('vtreat')
 # devtools::install_github("WinVector/WVPlots")
 library('WVPlots')
 
@@ -68,6 +69,7 @@ trainPlan = mkCrossFrameCExperiment(dTrain,
     vars,yName,yTarget,
     smFactor=2.0, 
     parallelCluster=cl)
+print(trainPlan$method)
 treatmentsC = trainPlan$treatments
 treatedTrainM = trainPlan$crossFrame
 
