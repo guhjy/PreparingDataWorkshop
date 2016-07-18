@@ -34,12 +34,12 @@ upselling = read.table(paste(dir,'orange_small_train_upselling.labels.txt',sep='
                         header=F,sep='\t')
 d$upselling = upselling$V1
 set.seed(729375)
-d$rgroup = runif(dim(d)[[1]])
-dTrain = subset(d,rgroup<=0.9)  # set for building models
-dTest = subset(d,rgroup>0.9) # set for evaluation
+rgroup = runif(dim(d)[[1]])
+dTrain = d[rgroup<=0.9,]  # set for building models
+dTest = d[rgroup>0.9,] # set for evaluation
 debug = FALSE
 if(debug) {
-  dTrain <- dTrain[sample.int(nrow(dTrainM),100),]
+  dTrain <- dTrain[sample.int(nrow(dTrain),100),]
   dTest <- dTest[sample.int(nrow(dTest),100),]
 }
 rm(list=c('d','churn','appetency','upselling','dir'))
