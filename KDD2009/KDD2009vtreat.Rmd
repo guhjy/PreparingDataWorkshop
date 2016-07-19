@@ -123,7 +123,10 @@ for(mname in c('glmPred','gbmPred','xgboost')) {
     #print(modelGBMs)
     #print(summary(modelGBMs))
     nTrees = gbm.perf(modelGBMs)
-   treatedTestP[[mname]] = predict(modelGBMs,
+    treatedTrainP[[mname]] = predict(modelGBMs,
+                                    newdata=treatedTrainM,type='response',
+                                    n.trees=nTrees)
+    treatedTestP[[mname]] = predict(modelGBMs,
                                     newdata=treatedTest,type='response',
                                     n.trees=nTrees)
   } else if(mname=='glmPred') {
@@ -132,24 +135,36 @@ for(mname in c('glmPred','gbmPred','xgboost')) {
                           alpha=0.5,
                           family='binomial')
     #print(summary(modelglms))
+    treatedTrainP[[mname]] = as.numeric(predict(modelglms,
+                                               newx=as.matrix(treatedTrainM[,selvars,drop=FALSE]),
+                                               type='response'))
     treatedTestP[[mname]] = as.numeric(predict(modelglms,
-                                              newx=as.matrix(treatedTest[,selvars,drop=FALSE]),
-                                              type='response'))
+                                               newx=as.matrix(treatedTest[,selvars,drop=FALSE]),
+                                               type='response'))
   } else if(mname=='xgboost') {
     modelxg = xgboost(data=xgb.DMatrix(as.matrix(treatedTrainM[,selvars,drop=FALSE]),
                                        label=treatedTrainM[[yName]]),
                       objective='binary:logistic', 
                       nrounds=100,
                       nthread=parallel::detectCores())
+    treatedTrainP[[mname]] = as.numeric(predict(modelxg,
+                                               as.matrix(treatedTrainM[,selvars,drop=FALSE])))
     treatedTestP[[mname]] = as.numeric(predict(modelxg,
                                                as.matrix(treatedTest[,selvars,drop=FALSE])))
   }
+  
+  t1 = paste(mname,'train data')
+  print(DoubleDensityPlot(treatedTrainP, mname, yName, 
+                          title=t1))
+  print(ROCPlot(treatedTrainP, mname, yName, 
+                title=t1))
   
   t2 = paste(mname,'test data')
   print(DoubleDensityPlot(treatedTestP, mname, yName, 
                           title=t2))
   print(ROCPlot(treatedTestP, mname, yName, 
                 title=t2))
+  
   print(date())
   print("*****************************")
 }
